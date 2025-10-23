@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Environnements
+.venv/
+venv/
+env/
+
+# Éditeurs / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Streamlit (ne jamais pousser des secrets)
+.streamlit/secrets.toml
+
+# Logs
+*.log
+
+# Données locales (souvent perso/volumineuses) — à ignorer par défaut
+data/
+csv/
