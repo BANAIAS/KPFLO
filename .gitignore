@@ -24,8 +24,10 @@ Thumbs.db
 *.log
 
 # Données locales (souvent perso/volumineuses) — à ignorer par défaut
-data/
-csv/
+-data/
++data/*
++!data/
++!data/kpflo.db
 
 # Fichiers lourds / perso à ne pas envoyer
 video/
@@ -33,5 +35,5 @@ Enregistrement automatique Adobe After Effects/
 projet maquette.aep
 texte.indd
 
-# Autoriser la base de démonstration
-!data/kpflo.db
+
+
