@@ -57,30 +57,8 @@ THIRTY = {
 }
 
 TWENTY = {
-    "Épargne & placements",            # si tu saisis l'épargne comme dépense (enveloppe)
-    "Épargne de précaution / projets", # idem
-    "Crédits & dettes",                # désendettement
+    "Épargne & placements",  # si tu saisis l'épargne comme dépense (enveloppe)
+    "Épargne de précaution / projets",  # idem
+    "Crédits & dettes",  # désendettement
     # (si tu ne les considères pas comme des "dépenses", laisse TWENTY vide et calcule l’épargne ailleurs)
 }
-
-
-
-# kpflo_core/categories.py (ajout)
-
-# Mapping Catégorie (exactement comme dans tes dépenses) -> IDBANK INSEE (IPC mensuel, base 2015=100)
-# ⚠️ PLACEHOLDERS: à remplacer par les vrais IDBANK de l’INSEE pour chaque division COICOP.
-# Tu peux commencer avec 3-4 catégories puis compléter.
-IPC_IDBANK_BY_CATEGORY = {
-    "Alimentation & boissons non alcoolisées": "001759963",  # ex "001765050" (remplacer par le vrai)
-    
-    "Transport": "001767692",
-    "Santé": "001763845",
-    "Habillement & chaussures": "001762208",
-    "Loisirs & culture": "001767170",
-    "Boissons alcoolisées & tabac": "001760629",
-    "Communications": "001766901",
-    "Restaurants & hôtels": "001768890",
-    "Biens & services divers": "001769465",
-    # (ajoute les autres si tu as leurs IDBANK)
-}
-
