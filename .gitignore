@@ -23,11 +23,12 @@ Thumbs.db
 # Logs
 *.log
 
-# Données locales (souvent perso/volumineuses) — à ignorer par défaut
--data/
-+data/*
-+!data/
-+!data/kpflo.db
+# Données locales — ignorées par défaut
+data/*
+!data/
+!data/kpflo.db
+!data/avatars/
+!data/avatars/**
 
 # Fichiers lourds / perso à ne pas envoyer
 video/
