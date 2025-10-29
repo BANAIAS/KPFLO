@@ -2281,24 +2281,41 @@ with tab_budget:
                 labels_mois = [opt["label"] for opt in month_options]
                 keys_mois = [opt["key"] for opt in month_options]
 
-                current_key = st.session_state.budget_selected_month_key
-                current_idx = (
-                    keys_mois.index(current_key) if current_key in keys_mois else 0
-                )
+                if len(keys_mois) == 0:
+                    # Aucun mois disponible : probablement aucun revenu/dépense daté
+                    st.warning(
+                        "⚠️ Ajoute au moins une ligne de revenu ou de dépense avec une date pour activer le suivi mensuel."
+                    )
+                    chosen_key = None
+                else:
+                    # Déterminer l’index courant si possible
+                    current_key = st.session_state.budget_selected_month_key
+                    if current_key not in keys_mois:
+                        current_idx = 0
+                    else:
+                        current_idx = keys_mois.index(current_key)
 
-                chosen_idx = st.selectbox(
-                    "Période",
-                    range(len(keys_mois)),
-                    index=current_idx,
-                    format_func=lambda i: labels_mois[i],
-                    key="budget_month_selector_ui",
-                )
-                st.session_state.budget_selected_month_key = keys_mois[chosen_idx]
+                    chosen_idx = st.selectbox(
+                        "Période",
+                        range(len(keys_mois)),
+                        index=current_idx,
+                        format_func=lambda i: labels_mois[i],
+                        key="budget_month_selector_ui",
+                    )
+
+                    # chosen_idx doit être un entier valide ici
+                    chosen_key = keys_mois[chosen_idx]
+
+                # Mise à jour de la clé sélectionnée seulement si elle est valide
+                if chosen_key is not None:
+                    st.session_state.budget_selected_month_key = chosen_key
 
             else:
+                # --- Mode "année" ---
                 years = sorted(
                     st.session_state.df["date"].dt.year.unique(), reverse=True
                 )
+
                 if years:
                     if (
                         st.session_state.budget_selected_year is None
@@ -2313,6 +2330,10 @@ with tab_budget:
                         key="budget_year_selector",
                     )
                     st.session_state.budget_selected_year = selected_year
+                else:
+                    st.warning(
+                        "⚠️ Aucune donnée datée trouvée. Ajoute des opérations pour activer la vue annuelle."
+                    )
 
         # --- Colonne centre : titre + switch vue ---
         with title_center:
