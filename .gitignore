@@ -26,3 +26,9 @@ Thumbs.db
 # Données locales (souvent perso/volumineuses) — à ignorer par défaut
 data/
 csv/
+
+# Fichiers lourds / perso à ne pas envoyer
+video/
+Enregistrement automatique Adobe After Effects/
+projet maquette.aep
+texte.indd
