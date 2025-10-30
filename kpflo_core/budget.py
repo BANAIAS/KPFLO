@@ -368,3 +368,193 @@ def build_coach_text(
     )
 
     return coach_html
+
+
+import pandas as pd
+from datetime import date
+from calendar import monthrange
+
+
+# 🔹 Extrait les lignes correspondant à un mois donné (inclusivement)
+def slice_df_for_month(df: pd.DataFrame, year: int, month: int) -> pd.DataFrame:
+    if df.empty:
+        return df.iloc[0:0]
+    start = date(year, month, 1)
+    last_day = monthrange(year, month)[1]
+    end = date(year, month, last_day)
+    d = df.copy()
+    d["date"] = pd.to_datetime(d["date"], errors="coerce")
+    mask = (d["date"].dt.date >= start) & (d["date"].dt.date <= end)
+    return d.loc[mask].copy()
+
+
+# 🔹 Extrait les lignes correspondant à une année donnée
+def slice_df_for_year(df: pd.DataFrame, year: int) -> pd.DataFrame:
+    if df.empty:
+        return df.iloc[0:0]
+    d = df.copy()
+    d["date"] = pd.to_datetime(d["date"], errors="coerce")
+    mask = d["date"].dt.year == year
+    return d.loc[mask].copy()
+
+
+# 🔹 Calcule les totaux (revenus, dépenses, solde) d’un DataFrame
+def compute_totals(df: pd.DataFrame) -> dict:
+    if df.empty:
+        return {"revenus": 0.0, "depenses": 0.0, "solde": 0.0}
+    revenus = float(df.loc[df["type"] == "IN", "montant"].sum())
+    depenses = float(-df.loc[df["type"] == "OUT", "montant"].sum())
+    return {"revenus": revenus, "depenses": depenses, "solde": revenus - depenses}
+
+
+# 🔹 Construit une série mensuelle (revenus + dépenses) prête pour les graphiques
+def build_year_timeseries(df_year: pd.DataFrame) -> pd.DataFrame:
+    if df_year.empty:
+        return pd.DataFrame(columns=["mois", "revenus", "depenses"])
+    d = df_year.copy()
+    d["date"] = pd.to_datetime(d["date"], errors="coerce")
+    d["mois"] = d["date"].dt.month
+
+    revenus_by_month = (
+        d[d["type"] == "IN"].groupby("mois")["montant"].sum().rename("revenus")
+    )
+    depenses_by_month = (
+        d[d["type"] == "OUT"]
+        .assign(montant_abs=lambda x: x["montant"].abs())
+        .groupby("mois")["montant_abs"]
+        .sum()
+        .rename("depenses")
+    )
+
+    merged = (
+        pd.concat([revenus_by_month, depenses_by_month], axis=1)
+        .fillna(0.0)
+        .reset_index()
+    )
+    mois_labels = {
+        1: "Jan",
+        2: "Fév",
+        3: "Mar",
+        4: "Avr",
+        5: "Mai",
+        6: "Juin",
+        7: "Juil",
+        8: "Août",
+        9: "Sept",
+        10: "Oct",
+        11: "Nov",
+        12: "Déc",
+    }
+    merged["mois_label"] = merged["mois"].map(mois_labels)
+    return merged
+
+
+# 🔹 Génère un texte “coach annuel” (bilan + conseils personnalisés)
+def build_coach_text_year(
+    df_year: pd.DataFrame,
+    year_totals: dict,
+    s_year_split: dict,
+    year_forecast: dict,
+    target_year: int,
+) -> str:
+    revenus_ytd = year_totals["revenus"]
+    depenses_ytd = year_totals["depenses"]
+    solde_ytd = year_totals["solde"]
+
+    worst_month_name = None
+    worst_month_value = None
+    if not df_year.empty:
+        d = df_year.copy()
+        d["date"] = pd.to_datetime(d["date"], errors="coerce")
+        d["mois_num"] = d["date"].dt.month
+        d["mois_label"] = d["date"].dt.strftime("%B")
+
+        depmois = (
+            d[d["type"] == "OUT"]
+            .assign(absval=lambda x: x["montant"].abs())
+            .groupby(["mois_num", "mois_label"], as_index=False)["absval"]
+            .sum()
+            .sort_values("absval", ascending=False)
+        )
+
+        if not depmois.empty:
+            row0 = depmois.iloc[0]
+            mois_lbl = row0["mois_label"]
+            worst_month_value = row0["absval"]
+            MONTHS_FR = {
+                "January": "janvier",
+                "February": "février",
+                "March": "mars",
+                "April": "avril",
+                "May": "mai",
+                "June": "juin",
+                "July": "juillet",
+                "August": "août",
+                "September": "septembre",
+                "October": "octobre",
+                "November": "novembre",
+                "December": "décembre",
+            }
+            worst_month_name = MONTHS_FR.get(mois_lbl, mois_lbl)
+
+    pct_besoins = float(s_year_split.get("50", 0.0))
+    pct_envies = float(s_year_split.get("30", 0.0))
+    pct_epargne = float(s_year_split.get("20", 0.0))
+
+    def badge_envies(p):
+        if p <= 30:
+            return "OK"
+        if p <= 35:
+            return "un peu élevé"
+        return "à maîtriser"
+
+    def badge_epargne(p):
+        if p >= 20:
+            return "très bien"
+        if p >= 10:
+            return "peut mieux faire"
+        return "insuffisant"
+
+    envies_comment = badge_envies(pct_envies)
+    epargne_comment = badge_epargne(pct_epargne)
+
+    proj_revenus = year_forecast.get("revenus", 0.0)
+    proj_depenses = year_forecast.get("depenses", 0.0)
+    proj_solde = year_forecast.get("solde", 0.0)
+
+    parts = []
+    parts.append(
+        f"Depuis le début de {target_year}, tu as encaissé <b>{revenus_ytd:,.0f} €</b> "
+        f"et dépensé <b>{depenses_ytd:,.0f} €</b>, soit un solde actuel de "
+        f"<b>{solde_ytd:,.0f} €</b>."
+    )
+    if worst_month_name:
+        parts.append(
+            f"Ton mois le plus coûteux est <b>{worst_month_name}</b> "
+            f"avec environ <b>{worst_month_value:,.0f} €</b> de sorties."
+        )
+    parts.append(
+        "Sur l'année, ta répartition ressemble à : "
+        f"<b>Besoins {pct_besoins:.1f}%</b>, "
+        f"<b>Envies {pct_envies:.1f}%</b> ({envies_comment}), "
+        f"<b>Épargne {pct_epargne:.1f}%</b> ({epargne_comment})."
+    )
+    parts.append(
+        f"Si tu gardes ce rythme, la fin {target_year} ressemble à "
+        f"<b>{proj_solde:,.0f} €</b> de solde annuel "
+        f"({proj_revenus:,.0f} € de revenus / {proj_depenses:,.0f} € de dépenses)."
+    )
+    if pct_epargne >= 20:
+        parts.append(
+            "Très bon signal : tu dégages une vraie capacité d'épargne sur l'année."
+        )
+    elif pct_envies > 35:
+        parts.append(
+            "Ton point d'attention principal reste les dépenses plaisir / envies. Tu peux viser < 30%."
+        )
+    else:
+        parts.append(
+            "Tu es globalement sur une trajectoire équilibrée. L'idée maintenant : tenir jusqu'à décembre."
+        )
+
+    return "<br><br>".join(parts).replace(",", " ")

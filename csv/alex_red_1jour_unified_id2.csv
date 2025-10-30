@@ -1,0 +1,354 @@
+user_id,date,kind,category,label,amount
+2,2024-01-05,revenu,"Revenus professionnels","Salaire principal_Jan 2024",1580.0
+2,2024-01-10,revenu,"Revenus exceptionnels","Remboursement d’assurance_Jan 2024",60.0
+2,2024-01-01,depense,"Logement","Eau_Jan 2024",62.0
+2,2024-01-03,depense,"Alimentation & boissons non alcoolisées","Boulangerie / pâtisserie_Jan 2024",58.0
+2,2024-01-07,depense,"Transport","Transports en commun_Jan 2024",82.0
+2,2024-01-09,depense,"Loisirs & culture","Sport / salle de sport_Jan 2024",115.0
+2,2024-01-12,depense,"Restaurants & hôtels","Restaurants_Jan 2024",175.0
+2,2024-01-15,depense,"Santé","Soins dentaires_Jan 2024",240.0
+2,2024-01-18,depense,"Communications","Abonnements numériques (Netflix, Spotify, etc.)_Jan 2024",35.0
+2,2024-01-20,depense,"Habillement & chaussures","Chaussures_Jan 2024",125.0
+2,2024-01-22,depense,"Impôts & taxes","Taxe d’habitation_Jan 2024",220.0
+2,2024-01-25,depense,"Crédits & dettes","Intérêts bancaires_Jan 2024",140.0
+2,2024-01-28,depense,"Dépenses exceptionnelles","Gros achats imprévus_Jan 2024",400.0
+2,2024-01-30,depense,"Assurances","Assurance santé complémentaire_Jan 2024",125.0
+2,2024-01-31,epargne,"Épargne & placements","PEL / CEL_Jan 2024",0.0
+2,2024-02-08,revenu,"Revenus professionnels","Prime / bonus_Feb 2024",180.0
+2,2024-02-15,revenu,"Revenus sociaux & aides","RSA / Aide sociale_Feb 2024",380.0
+2,2024-02-01,depense,"Logement","Gaz & combustibles_Feb 2024",82.0
+2,2024-02-03,depense,"Alimentation & boissons non alcoolisées","Fruits & légumes_Feb 2024",92.0
+2,2024-02-06,depense,"Transport","Péages / parking_Feb 2024",62.0
+2,2024-02-09,depense,"Loisirs & culture","Voyages / vacances_Feb 2024",520.0
+2,2024-02-12,depense,"Restaurants & hôtels","Hôtels / hébergements / Airbnb_Feb 2024",220.0
+2,2024-02-15,depense,"Santé","Lunettes / lentilles_Feb 2024",230.0
+2,2024-02-18,depense,"Communications","Télévision / streaming_Feb 2024",32.0
+2,2024-02-20,depense,"Habillement & chaussures","Accessoires / bijoux_Feb 2024",105.0
+2,2024-02-22,depense,"Impôts & taxes","Amendes / contraventions_Feb 2024",165.0
+2,2024-02-25,depense,"Crédits & dettes","Remboursement de dettes privées_Feb 2024",280.0
+2,2024-02-28,depense,"Dépenses exceptionnelles","Déménagement_Feb 2024",460.0
+2,2024-02-29,depense,"Assurances","Assurance vie_Feb 2024",135.0
+2,2024-02-29,epargne,"Épargne & placements","Bourse / actions / ETF_Feb 2024",0.0
+2,2024-03-05,revenu,"Revenus professionnels","Heures supplémentaires_Mar 2024",140.0
+2,2024-03-12,revenu,"Revenus financiers","Intérêts bancaires_Mar 2024",45.0
+2,2024-03-01,depense,"Logement","Loyer / crédit immobilier_Mar 2024",950.0
+2,2024-03-03,depense,"Alimentation & boissons non alcoolisées","Courses (supermarché, épicerie)_Mar 2024",195.0
+2,2024-03-07,depense,"Transport","Essence / carburant_Mar 2024",102.0
+2,2024-03-10,depense,"Loisirs & culture","Cinéma / spectacles_Mar 2024",88.0
+2,2024-03-13,depense,"Restaurants & hôtels","Restaurants_Mar 2024",185.0
+2,2024-03-15,depense,"Santé","Pharmacie / parapharmacie_Mar 2024",62.0
+2,2024-03-18,depense,"Communications","Forfait mobile_Mar 2024",50.0
+2,2024-03-20,depense,"Habillement & chaussures","Vêtements_Mar 2024",185.0
+2,2024-03-22,depense,"Impôts & taxes","Impôt sur le revenu_Mar 2024",200.0
+2,2024-03-25,depense,"Crédits & dettes","Crédit consommation_Mar 2024",260.0
+2,2024-03-28,depense,"Dépenses exceptionnelles","Cadeaux_Mar 2024",135.0
+2,2024-03-30,depense,"Assurances","Assurance auto_Mar 2024",90.0
+2,2024-03-31,epargne,"Épargne & placements","Cryptomonnaies_Mar 2024",0.0
+2,2024-04-07,revenu,"Revenus professionnels","Salaire principal_Apr 2024",1680.0
+2,2024-04-15,revenu,"Revenus exceptionnels","Gains concours / jeux_Apr 2024",55.0
+2,2024-04-01,depense,"Logement","Électricité_Apr 2024",108.0
+2,2024-04-03,depense,"Alimentation & boissons non alcoolisées","Plats préparés_Apr 2024",145.0
+2,2024-04-06,depense,"Transport","Entretien / réparations_Apr 2024",250.0
+2,2024-04-09,depense,"Loisirs & culture","Jeux vidéo_Apr 2024",125.0
+2,2024-04-12,depense,"Restaurants & hôtels","Fast-food_Apr 2024",78.0
+2,2024-04-15,depense,"Santé","Médecin / spécialiste_Apr 2024",102.0
+2,2024-04-18,depense,"Communications","Internet / fibre_Apr 2024",50.0
+2,2024-04-20,depense,"Habillement & chaussures","Chaussures_Apr 2024",140.0
+2,2024-04-22,depense,"Impôts & taxes","Autres contributions fiscales_Apr 2024",195.0
+2,2024-04-25,depense,"Crédits & dettes","Carte de crédit / revolving_Apr 2024",240.0
+2,2024-04-28,depense,"Dépenses exceptionnelles","Urgences diverses_Apr 2024",420.0
+2,2024-04-30,depense,"Assurances","Assurance habitation_Apr 2024",95.0
+2,2024-04-30,epargne,"Épargne & placements","Livret A / LDDS_Apr 2024",0.0
+2,2024-05-05,revenu,"Revenus professionnels","Salaire principal_May 2024",2100.0
+2,2024-05-10,revenu,"Revenus sociaux & aides","Allocations familiales_May 2024",140.0
+2,2024-05-15,revenu,"Revenus exceptionnels","Remboursement d’assurance_May 2024",90.0
+2,2024-05-01,depense,"Logement","Loyer / crédit immobilier_May 2024",950.0
+2,2024-05-03,depense,"Alimentation & boissons non alcoolisées","Courses (supermarché, épicerie)_May 2024",130.0
+2,2024-05-07,depense,"Transport","Essence / carburant_May 2024",65.0
+2,2024-05-10,depense,"Loisirs & culture","Cinéma / sortie_May 2024",45.0
+2,2024-05-12,depense,"Santé","Pharmacie / parapharmacie_May 2024",35.0
+2,2024-05-15,depense,"Communications","Forfait mobile_May 2024",50.0
+2,2024-05-18,depense,"Restaurants & hôtels","Restaurants_May 2024",90.0
+2,2024-05-20,depense,"Habillement & chaussures","Vêtements_May 2024",110.0
+2,2024-05-22,depense,"Impôts & taxes","Impôt sur le revenu_May 2024",200.0
+2,2024-05-25,depense,"Crédits & dettes","Crédit consommation_May 2024",160.0
+2,2024-05-28,depense,"Dépenses exceptionnelles","Cadeaux_May 2024",80.0
+2,2024-05-30,depense,"Assurances","Assurance auto_May 2024",85.0
+2,2024-05-31,epargne,"Épargne & placements","Livret A / LDDS_May 2024",25.0
+2,2024-05-31,epargne,"Épargne & placements","Assurance-vie_May 2024",15.0
+2,2024-06-05,revenu,"Revenus professionnels","Salaire principal_June 2024",2050.0
+2,2024-06-10,revenu,"Revenus sociaux & aides","RSA / Aide sociale_June 2024",190.0
+2,2024-06-15,revenu,"Revenus exceptionnels","Vente ponctuelle (meubles, objets, etc.)_June 2024",70.0
+2,2024-06-01,depense,"Logement","Eau_June 2024",45.0
+2,2024-06-03,depense,"Alimentation & boissons non alcoolisées","Boulangerie / pâtisserie_June 2024",30.0
+2,2024-06-07,depense,"Transport","Transports en commun_June 2024",55.0
+2,2024-06-10,depense,"Loisirs & culture","Sport / salle de sport_June 2024",65.0
+2,2024-06-12,depense,"Santé","Médecin / spécialiste_June 2024",50.0
+2,2024-06-15,depense,"Communications","Internet / fibre_June 2024",40.0
+2,2024-06-18,depense,"Restaurants & hôtels","Fast-food_June 2024",35.0
+2,2024-06-20,depense,"Ameublement & équipement ménager","Meubles_June 2024",160.0
+2,2024-06-22,depense,"Impôts & taxes","Taxe d’habitation_June 2024",190.0
+2,2024-06-25,depense,"Crédits & dettes","Carte de crédit / revolving_June 2024",130.0
+2,2024-06-28,depense,"Dépenses exceptionnelles","Gros achats imprévus_June 2024",220.0
+2,2024-06-30,depense,"Assurances","Assurance habitation_June 2024",75.0
+2,2024-06-30,epargne,"Épargne & placements","PEL / CEL_June 2024",20.0
+2,2024-06-30,epargne,"Épargne & placements","Assurance-vie_June 2024",10.0
+2,2024-07-05,revenu,"Revenus professionnels","Heures supplémentaires_July 2024",90.0
+2,2024-07-10,revenu,"Revenus financiers","Intérêts bancaires_July 2024",45.0
+2,2024-07-15,revenu,"Revenus professionnels","Salaire principal_July 2024",2150.0
+2,2024-07-01,depense,"Logement","Électricité_July 2024",65.0
+2,2024-07-03,depense,"Alimentation & boissons non alcoolisées","Fruits & légumes_July 2024",45.0
+2,2024-07-07,depense,"Transport","Péages / parking_July 2024",35.0
+2,2024-07-10,depense,"Loisirs & culture","Voyages / vacances_July 2024",320.0
+2,2024-07-12,depense,"Santé","Lunettes / lentilles_July 2024",160.0
+2,2024-07-15,depense,"Communications","Abonnements numériques (Netflix, Spotify, etc.)_July 2024",25.0
+2,2024-07-18,depense,"Restaurants & hôtels","Livraison de repas_July 2024",55.0
+2,2024-07-20,depense,"Habillement & chaussures","Chaussures_July 2024",85.0
+2,2024-07-22,depense,"Impôts & taxes","Amendes / contraventions_July 2024",110.0
+2,2024-07-25,depense,"Crédits & dettes","Remboursement de dettes privées_July 2024",210.0
+2,2024-07-28,depense,"Dépenses exceptionnelles","Déménagement_July 2024",270.0
+2,2024-07-31,depense,"Assurances","Assurance santé complémentaire_July 2024",95.0
+2,2024-07-31,epargne,"Épargne & placements","Bourse / actions / ETF_July 2024",35.0
+2,2024-07-31,epargne,"Épargne & placements","Assurance-vie_July 2024",20.0
+2,2024-08-05,revenu,"Revenus professionnels","Prime / bonus_August 2024",280.0
+2,2024-08-10,revenu,"Revenus sociaux & aides","Indemnités chômage_August 2024",380.0
+2,2024-08-15,revenu,"Revenus exceptionnels","Gains concours / jeux_August 2024",45.0
+2,2024-08-01,depense,"Logement","Gaz & combustibles_August 2024",55.0
+2,2024-08-03,depense,"Alimentation & boissons non alcoolisées","Plats préparés_August 2024",65.0
+2,2024-08-07,depense,"Transport","Entretien / réparations_August 2024",110.0
+2,2024-08-10,depense,"Loisirs & culture","Jeux vidéo_August 2024",75.0
+2,2024-08-12,depense,"Santé","Soins dentaires_August 2024",210.0
+2,2024-08-15,depense,"Communications","Télévision / streaming_August 2024",20.0
+2,2024-08-18,depense,"Restaurants & hôtels","Cafés / bars_August 2024",45.0
+2,2024-08-20,depense,"Ameublement & équipement ménager","Électroménager_August 2024",160.0
+2,2024-08-22,depense,"Impôts & taxes","Autres contributions fiscales_August 2024",160.0
+2,2024-08-25,depense,"Crédits & dettes","Intérêts bancaires_August 2024",85.0
+2,2024-08-28,depense,"Dépenses exceptionnelles","Urgences diverses_August 2024",320.0
+2,2024-08-31,depense,"Assurances","Assurance vie_August 2024",105.0
+2,2024-08-31,epargne,"Épargne & placements","Cryptomonnaies_August 2024",25.0
+2,2024-08-31,epargne,"Épargne & placements","Assurance-vie_August 2024",15.0
+2,2024-09-05,revenu,"Revenus professionnels","Job secondaire / freelance_September 2024",480.0
+2,2024-09-10,revenu,"Revenus financiers","Revenus locatifs_September 2024",190.0
+2,2024-09-15,revenu,"Revenus sociaux & aides","Retraite / pension_September 2024",280.0
+2,2024-09-01,depense,"Logement","Assurance habitation_September 2024",85.0
+2,2024-09-03,depense,"Alimentation & boissons non alcoolisées","Boissons sans alcool_September 2024",35.0
+2,2024-09-07,depense,"Transport","Assurance auto / moto_September 2024",125.0
+2,2024-09-10,depense,"Loisirs & culture","Livres / magazines_September 2024",30.0
+2,2024-09-12,depense,"Santé","Hôpital / clinique_September 2024",160.0
+2,2024-09-15,depense,"Communications","Téléphonie fixe_September 2024",25.0
+2,2024-09-18,depense,"Restaurants & hôtels","Hôtels / hébergements / Airbnb_September 2024",210.0
+2,2024-09-20,depense,"Habillement & chaussures","Accessoires / bijoux_September 2024",55.0
+2,2024-09-22,depense,"Impôts & taxes","CSG / CRDS_September 2024",190.0
+2,2024-09-25,depense,"Crédits & dettes","Crédit auto_September 2024",260.0
+2,2024-09-28,depense,"Dépenses exceptionnelles","Mariage / anniversaire / fêtes_September 2024",110.0
+2,2024-09-30,depense,"Assurances","Assurance téléphone / multimédia_September 2024",35.0
+2,2024-09-30,epargne,"Épargne & placements","Autres placements financiers_September 2024",45.0
+2,2024-09-30,epargne,"Épargne & placements","Assurance-vie_September 2024",25.0
+2,2024-10-05,revenu,"Revenus professionnels","Salaire principal_October 2024",2200.0
+2,2024-10-10,revenu,"Revenus exceptionnels","Remboursement d’assurance_October 2024",140.0
+2,2024-10-15,revenu,"Revenus sociaux & aides","CAF_October 2024",90.0
+2,2024-10-01,depense,"Logement","Loyer / crédit immobilier_October 2024",900.0
+2,2024-10-03,depense,"Alimentation & boissons non alcoolisées","Courses (supermarché, épicerie)_October 2024",80.0
+2,2024-10-07,depense,"Transport","Essence / carburant_October 2024",50.0
+2,2024-10-10,depense,"Loisirs & culture","Cinéma / sortie_October 2024",30.0
+2,2024-10-12,depense,"Santé","Pharmacie / parapharmacie_October 2024",22.0
+2,2024-10-15,depense,"Communications","Forfait mobile_October 2024",50.0
+2,2024-10-18,depense,"Restaurants & hôtels","Restaurants_October 2024",85.0
+2,2024-10-20,depense,"Habillement & chaussures","Vêtements_October 2024",105.0
+2,2024-10-22,depense,"Impôts & taxes","Impôt sur le revenu_October 2024",200.0
+2,2024-10-25,depense,"Crédits & dettes","Crédit consommation_October 2024",155.0
+2,2024-10-28,depense,"Dépenses exceptionnelles","Cadeaux_October 2024",75.0
+2,2024-10-31,depense,"Assurances","Assurance auto_October 2024",85.0
+2,2024-10-31,epargne,"Épargne & placements","Livret A / LDDS_October 2024",15.0
+2,2024-10-31,epargne,"Épargne & placements","Assurance-vie_October 2024",15.0
+2,2024-11-05,revenu,"Revenus professionnels","Salaire principal_Nov 2024",1550.0
+2,2024-11-15,revenu,"Revenus exceptionnels","Vente ponctuelle (meubles, objets, etc.)_Nov 2024",60.0
+2,2024-11-01,depense,"Logement","Loyer / crédit immobilier_Nov 2024",950.0
+2,2024-11-03,depense,"Alimentation & boissons non alcoolisées","Courses (supermarché, épicerie)_Nov 2024",195.0
+2,2024-11-06,depense,"Transport","Essence / carburant_Nov 2024",100.0
+2,2024-11-08,depense,"Loisirs & culture","Cinéma / spectacles_Nov 2024",90.0
+2,2024-11-10,depense,"Restaurants & hôtels","Restaurants_Nov 2024",175.0
+2,2024-11-13,depense,"Communications","Forfait mobile_Nov 2024",50.0
+2,2024-11-15,depense,"Santé","Pharmacie / parapharmacie_Nov 2024",62.0
+2,2024-11-18,depense,"Restaurants & hôtels","Fast-food_Nov 2024",80.0
+2,2024-11-20,depense,"Loisirs & culture","Sorties diverses / loisirs_Nov 2024",155.0
+2,2024-11-22,depense,"Impôts & taxes","Impôt sur le revenu_Nov 2024",200.0
+2,2024-11-25,depense,"Crédits & dettes","Carte de crédit / revolving_Nov 2024",270.0
+2,2024-11-28,depense,"Dépenses exceptionnelles","Cadeaux_Nov 2024",140.0
+2,2024-11-30,depense,"Assurances","Assurance auto_Nov 2024",90.0
+2,2024-11-30,epargne,"Épargne & placements","Livret A / LDDS_Nov 2024",0.0
+2,2024-12-07,revenu,"Revenus professionnels","Job secondaire / freelance_Dec 2024",300.0
+2,2024-12-15,revenu,"Revenus sociaux & aides","Indemnités chômage_Dec 2024",500.0
+2,2024-12-01,depense,"Logement","Électricité_Dec 2024",110.0
+2,2024-12-03,depense,"Alimentation & boissons non alcoolisées","Plats préparés_Dec 2024",145.0
+2,2024-12-05,depense,"Transport","Entretien / réparations_Dec 2024",230.0
+2,2024-12-08,depense,"Loisirs & culture","Jeux vidéo_Dec 2024",120.0
+2,2024-12-10,depense,"Restaurants & hôtels","Cafés / bars_Dec 2024",92.0
+2,2024-12-12,depense,"Santé","Médecin / spécialiste_Dec 2024",100.0
+2,2024-12-15,depense,"Communications","Internet / fibre_Dec 2024",50.0
+2,2024-12-18,depense,"Restaurants & hôtels","Livraison de repas_Dec 2024",80.0
+2,2024-12-20,depense,"Habillement & chaussures","Vêtements_Dec 2024",185.0
+2,2024-12-22,depense,"Impôts & taxes","CSG / CRDS_Dec 2024",195.0
+2,2024-12-25,depense,"Crédits & dettes","Crédit consommation_Dec 2024",240.0
+2,2024-12-27,depense,"Dépenses exceptionnelles","Urgences diverses_Dec 2024",400.0
+2,2024-12-29,depense,"Assurances","Assurance habitation_Dec 2024",100.0
+2,2024-12-31,epargne,"Épargne & placements","Assurance-vie_Dec 2024",0.0
+2,2025-01-05,revenu,"Revenus professionnels","Salaire principal_Jan 2025",1520.0
+2,2025-01-10,revenu,"Revenus exceptionnels","Remboursement d’assurance_Jan 2025",50.0
+2,2025-01-01,depense,"Logement","Eau_Jan 2025",65.0
+2,2025-01-03,depense,"Alimentation & boissons non alcoolisées","Boulangerie / pâtisserie_Jan 2025",62.0
+2,2025-01-07,depense,"Transport","Transports en commun_Jan 2025",88.0
+2,2025-01-09,depense,"Loisirs & culture","Sport / salle de sport_Jan 2025",125.0
+2,2025-01-12,depense,"Restaurants & hôtels","Restaurants_Jan 2025",185.0
+2,2025-01-15,depense,"Santé","Soins dentaires_Jan 2025",250.0
+2,2025-01-18,depense,"Communications","Abonnements numériques (Netflix, Spotify, etc.)_Jan 2025",38.0
+2,2025-01-20,depense,"Habillement & chaussures","Chaussures_Jan 2025",135.0
+2,2025-01-22,depense,"Impôts & taxes","Taxe d’habitation_Jan 2025",230.0
+2,2025-01-25,depense,"Crédits & dettes","Intérêts bancaires_Jan 2025",150.0
+2,2025-01-28,depense,"Dépenses exceptionnelles","Gros achats imprévus_Jan 2025",420.0
+2,2025-01-30,depense,"Assurances","Assurance santé complémentaire_Jan 2025",130.0
+2,2025-01-31,epargne,"Épargne & placements","PEL / CEL_Jan 2025",0.0
+2,2025-02-08,revenu,"Revenus professionnels","Prime / bonus_Feb 2025",160.0
+2,2025-02-15,revenu,"Revenus sociaux & aides","RSA / Aide sociale_Feb 2025",400.0
+2,2025-02-01,depense,"Logement","Gaz & combustibles_Feb 2025",88.0
+2,2025-02-03,depense,"Alimentation & boissons non alcoolisées","Fruits & légumes_Feb 2025",98.0
+2,2025-02-06,depense,"Transport","Péages / parking_Feb 2025",68.0
+2,2025-02-09,depense,"Loisirs & culture","Voyages / vacances_Feb 2025",540.0
+2,2025-02-12,depense,"Restaurants & hôtels","Hôtels / hébergements / Airbnb_Feb 2025",230.0
+2,2025-02-15,depense,"Santé","Lunettes / lentilles_Feb 2025",240.0
+2,2025-02-18,depense,"Communications","Télévision / streaming_Feb 2025",35.0
+2,2025-02-20,depense,"Habillement & chaussures","Accessoires / bijoux_Feb 2025",110.0
+2,2025-02-22,depense,"Impôts & taxes","Amendes / contraventions_Feb 2025",175.0
+2,2025-02-25,depense,"Crédits & dettes","Remboursement de dettes privées_Feb 2025",290.0
+2,2025-02-28,depense,"Dépenses exceptionnelles","Déménagement_Feb 2025",480.0
+2,2025-02-28,depense,"Assurances","Assurance vie_Feb 2025",140.0
+2,2025-02-28,epargne,"Épargne & placements","Bourse / actions / ETF_Feb 2025",0.0
+2,2025-03-05,revenu,"Revenus professionnels","Heures supplémentaires_Mar 2025",130.0
+2,2025-03-12,revenu,"Revenus financiers","Intérêts bancaires_Mar 2025",40.0
+2,2025-03-01,depense,"Logement","Loyer / crédit immobilier_Mar 2025",950.0
+2,2025-03-03,depense,"Alimentation & boissons non alcoolisées","Courses (supermarché, épicerie)_Mar 2025",205.0
+2,2025-03-07,depense,"Transport","Essence / carburant_Mar 2025",108.0
+2,2025-03-10,depense,"Loisirs & culture","Cinéma / spectacles_Mar 2025",95.0
+2,2025-03-13,depense,"Restaurants & hôtels","Restaurants_Mar 2025",195.0
+2,2025-03-15,depense,"Santé","Pharmacie / parapharmacie_Mar 2025",68.0
+2,2025-03-18,depense,"Communications","Forfait mobile_Mar 2025",50.0
+2,2025-03-20,depense,"Habillement & chaussures","Vêtements_Mar 2025",195.0
+2,2025-03-22,depense,"Impôts & taxes","Impôt sur le revenu_Mar 2025",200.0
+2,2025-03-25,depense,"Crédits & dettes","Crédit consommation_Mar 2025",270.0
+2,2025-03-28,depense,"Dépenses exceptionnelles","Cadeaux_Mar 2025",145.0
+2,2025-03-30,depense,"Assurances","Assurance auto_Mar 2025",90.0
+2,2025-03-31,epargne,"Épargne & placements","Cryptomonnaies_Mar 2025",0.0
+2,2025-04-07,revenu,"Revenus professionnels","Salaire principal_Apr 2025",1620.0
+2,2025-04-15,revenu,"Revenus exceptionnels","Gains concours / jeux_Apr 2025",50.0
+2,2025-04-01,depense,"Logement","Électricité_Apr 2025",112.0
+2,2025-04-03,depense,"Alimentation & boissons non alcoolisées","Plats préparés_Apr 2025",155.0
+2,2025-04-06,depense,"Transport","Entretien / réparations_Apr 2025",260.0
+2,2025-04-09,depense,"Loisirs & culture","Jeux vidéo_Apr 2025",135.0
+2,2025-04-12,depense,"Restaurants & hôtels","Fast-food_Apr 2025",82.0
+2,2025-04-15,depense,"Santé","Médecin / spécialiste_Apr 2025",108.0
+2,2025-04-18,depense,"Communications","Internet / fibre_Apr 2025",50.0
+2,2025-04-20,depense,"Habillement & chaussures","Chaussures_Apr 2025",150.0
+2,2025-04-22,depense,"Impôts & taxes","Autres contributions fiscales_Apr 2025",200.0
+2,2025-04-25,depense,"Crédits & dettes","Carte de crédit / revolving_Apr 2025",250.0
+2,2025-04-28,depense,"Dépenses exceptionnelles","Urgences diverses_Apr 2025",440.0
+2,2025-04-30,depense,"Assurances","Assurance habitation_Apr 2025",100.0
+2,2025-04-30,epargne,"Épargne & placements","Livret A / LDDS_Apr 2025",0.0
+2,2025-05-05,revenu,"Revenus professionnels","Salaire principal_May 2025",2200.0
+2,2025-05-10,revenu,"Revenus sociaux & aides","Allocations familiales_May 2025",150.0
+2,2025-05-15,revenu,"Revenus exceptionnels","Remboursement d’assurance_May 2025",100.0
+2,2025-05-01,depense,"Logement","Loyer / crédit immobilier_May 2025",950.0
+2,2025-05-03,depense,"Alimentation & boissons non alcoolisées","Courses (supermarché, épicerie)_May 2025",120.0
+2,2025-05-07,depense,"Transport","Essence / carburant_May 2025",60.0
+2,2025-05-10,depense,"Loisirs & culture","Cinéma / sortie_May 2025",40.0
+2,2025-05-12,depense,"Santé","Pharmacie / parapharmacie_May 2025",30.0
+2,2025-05-15,depense,"Communications","Forfait mobile_May 2025",50.0
+2,2025-05-18,depense,"Restaurants & hôtels","Restaurants_May 2025",80.0
+2,2025-05-20,depense,"Habillement & chaussures","Vêtements_May 2025",100.0
+2,2025-05-22,depense,"Impôts & taxes","Impôt sur le revenu_May 2025",200.0
+2,2025-05-25,depense,"Crédits & dettes","Crédit consommation_May 2025",150.0
+2,2025-05-28,depense,"Dépenses exceptionnelles","Cadeaux_May 2025",70.0
+2,2025-05-30,depense,"Assurances","Assurance auto_May 2025",80.0
+2,2025-05-31,epargne,"Épargne & placements","Livret A / LDDS_May 2025",30.0
+2,2025-05-31,epargne,"Épargne & placements","Assurance-vie_May 2025",20.0
+2,2025-06-05,revenu,"Revenus professionnels","Salaire principal_June 2025",2150.0
+2,2025-06-10,revenu,"Revenus sociaux & aides","RSA / Aide sociale_June 2025",200.0
+2,2025-06-15,revenu,"Revenus exceptionnels","Vente ponctuelle (meubles, objets, etc.)_June 2025",80.0
+2,2025-06-01,depense,"Logement","Eau_June 2025",40.0
+2,2025-06-03,depense,"Alimentation & boissons non alcoolisées","Boulangerie / pâtisserie_June 2025",25.0
+2,2025-06-07,depense,"Transport","Transports en commun_June 2025",50.0
+2,2025-06-10,depense,"Loisirs & culture","Sport / salle de sport_June 2025",60.0
+2,2025-06-12,depense,"Santé","Médecin / spécialiste_June 2025",45.0
+2,2025-06-15,depense,"Communications","Internet / fibre_June 2025",35.0
+2,2025-06-18,depense,"Restaurants & hôtels","Fast-food_June 2025",30.0
+2,2025-06-20,depense,"Ameublement & équipement ménager","Meubles_June 2025",150.0
+2,2025-06-22,depense,"Impôts & taxes","Taxe d’habitation_June 2025",180.0
+2,2025-06-25,depense,"Crédits & dettes","Carte de crédit / revolving_June 2025",120.0
+2,2025-06-28,depense,"Dépenses exceptionnelles","Gros achats imprévus_June 2025",200.0
+2,2025-06-30,depense,"Assurances","Assurance habitation_June 2025",70.0
+2,2025-06-30,epargne,"Épargne & placements","PEL / CEL_June 2025",25.0
+2,2025-06-30,epargne,"Épargne & placements","Assurance-vie_June 2025",15.0
+2,2025-07-05,revenu,"Revenus professionnels","Heures supplémentaires_July 2025",100.0
+2,2025-07-10,revenu,"Revenus financiers","Intérêts bancaires_July 2025",50.0
+2,2025-07-15,revenu,"Revenus professionnels","Salaire principal_July 2025",2250.0
+2,2025-07-01,depense,"Logement","Électricité_July 2025",60.0
+2,2025-07-03,depense,"Alimentation & boissons non alcoolisées","Fruits & légumes_July 2025",40.0
+2,2025-07-07,depense,"Transport","Péages / parking_July 2025",30.0
+2,2025-07-10,depense,"Loisirs & culture","Voyages / vacances_July 2025",300.0
+2,2025-07-12,depense,"Santé","Lunettes / lentilles_July 2025",150.0
+2,2025-07-15,depense,"Communications","Abonnements numériques (Netflix, Spotify, etc.)_July 2025",20.0
+2,2025-07-18,depense,"Restaurants & hôtels","Livraison de repas_July 2025",50.0
+2,2025-07-20,depense,"Habillement & chaussures","Chaussures_July 2025",80.0
+2,2025-07-22,depense,"Impôts & taxes","Amendes / contraventions_July 2025",100.0
+2,2025-07-25,depense,"Crédits & dettes","Remboursement de dettes privées_July 2025",200.0
+2,2025-07-28,depense,"Dépenses exceptionnelles","Déménagement_July 2025",250.0
+2,2025-07-31,depense,"Assurances","Assurance santé complémentaire_July 2025",90.0
+2,2025-07-31,epargne,"Épargne & placements","Bourse / actions / ETF_July 2025",40.0
+2,2025-07-31,epargne,"Épargne & placements","Assurance-vie_July 2025",25.0
+2,2025-08-05,revenu,"Revenus professionnels","Prime / bonus_August 2025",300.0
+2,2025-08-10,revenu,"Revenus sociaux & aides","Indemnités chômage_August 2025",400.0
+2,2025-08-15,revenu,"Revenus exceptionnels","Gains concours / jeux_August 2025",50.0
+2,2025-08-01,depense,"Logement","Gaz & combustibles_August 2025",50.0
+2,2025-08-03,depense,"Alimentation & boissons non alcoolisées","Plats préparés_August 2025",60.0
+2,2025-08-07,depense,"Transport","Entretien / réparations_August 2025",100.0
+2,2025-08-10,depense,"Loisirs & culture","Jeux vidéo_August 2025",70.0
+2,2025-08-12,depense,"Santé","Soins dentaires_August 2025",200.0
+2,2025-08-15,depense,"Communications","Télévision / streaming_August 2025",15.0
+2,2025-08-18,depense,"Restaurants & hôtels","Cafés / bars_August 2025",40.0
+2,2025-08-20,depense,"Ameublement & équipement ménager","Électroménager_August 2025",150.0
+2,2025-08-22,depense,"Impôts & taxes","Autres contributions fiscales_August 2025",150.0
+2,2025-08-25,depense,"Crédits & dettes","Intérêts bancaires_August 2025",80.0
+2,2025-08-28,depense,"Dépenses exceptionnelles","Urgences diverses_August 2025",300.0
+2,2025-08-31,depense,"Assurances","Assurance vie_August 2025",100.0
+2,2025-08-31,epargne,"Épargne & placements","Cryptomonnaies_August 2025",30.0
+2,2025-08-31,epargne,"Épargne & placements","Assurance-vie_August 2025",20.0
+2,2025-09-05,revenu,"Revenus professionnels","Job secondaire / freelance_September 2025",500.0
+2,2025-09-10,revenu,"Revenus financiers","Revenus locatifs_September 2025",200.0
+2,2025-09-15,revenu,"Revenus sociaux & aides","Retraite / pension_September 2025",300.0
+2,2025-09-01,depense,"Logement","Assurance habitation_September 2025",80.0
+2,2025-09-03,depense,"Alimentation & boissons non alcoolisées","Boissons sans alcool_September 2025",30.0
+2,2025-09-07,depense,"Transport","Assurance auto / moto_September 2025",120.0
+2,2025-09-10,depense,"Loisirs & culture","Livres / magazines_September 2025",25.0
+2,2025-09-12,depense,"Santé","Hôpital / clinique_September 2025",150.0
+2,2025-09-15,depense,"Communications","Téléphonie fixe_September 2025",20.0
+2,2025-09-18,depense,"Restaurants & hôtels","Hôtels / hébergements / Airbnb_September 2025",200.0
+2,2025-09-20,depense,"Habillement & chaussures","Accessoires / bijoux_September 2025",50.0
+2,2025-09-22,depense,"Impôts & taxes","CSG / CRDS_September 2025",180.0
+2,2025-09-25,depense,"Crédits & dettes","Crédit auto_September 2025",250.0
+2,2025-09-28,depense,"Dépenses exceptionnelles","Mariage / anniversaire / fêtes_September 2025",100.0
+2,2025-09-30,depense,"Assurances","Assurance téléphone / multimédia_September 2025",30.0
+2,2025-09-30,epargne,"Épargne & placements","Autres placements financiers_September 2025",50.0
+2,2025-09-30,epargne,"Épargne & placements","Assurance-vie_September 2025",30.0
+2,2025-10-05,revenu,"Revenus professionnels","Salaire principal_October 2025",2300.0
+2,2025-10-10,revenu,"Revenus exceptionnels","Remboursement d’assurance_October 2025",150.0
+2,2025-10-15,revenu,"Revenus sociaux & aides","CAF_October 2025",100.0
+2,2025-10-01,depense,"Logement","Loyer / crédit immobilier_October 2025",900.0
+2,2025-10-03,depense,"Alimentation & boissons non alcoolisées","Courses (supermarché, épicerie)_October 2025",75.5
+2,2025-10-07,depense,"Transport","Essence / carburant_October 2025",45.0
+2,2025-10-10,depense,"Loisirs & culture","Cinéma / sortie_October 2025",25.0
+2,2025-10-12,depense,"Santé","Pharmacie / parapharmacie_October 2025",18.5
+2,2025-10-15,depense,"Communications","Forfait mobile_October 2025",50.0
+2,2025-10-18,depense,"Restaurants & hôtels","Restaurants_October 2025",80.0
+2,2025-10-20,depense,"Habillement & chaussures","Vêtements_October 2025",100.0
+2,2025-10-22,depense,"Impôts & taxes","Impôt sur le revenu_October 2025",200.0
+2,2025-10-25,depense,"Crédits & dettes","Crédit consommation_October 2025",150.0
+2,2025-10-27,depense,"Dépenses exceptionnelles","Cadeaux_October 2025",70.0

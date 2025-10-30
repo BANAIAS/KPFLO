@@ -31,11 +31,17 @@ from kpflo_core.budget import (
     predict_end_of_year,
     build_coach_text,
     savings_projection,
+    slice_df_for_month,
+    slice_df_for_year,
+    compute_totals,
+    build_year_timeseries,
+    build_coach_text_year,
 )
 
 from kpflo_core.categories import (
     INCOME_CATEGORIES,
     EXPENSE_CATEGORIES,
+    CATEGORY_BUDGET_RULES,
 )
 
 from kpflo_core.revenus import (
@@ -45,6 +51,10 @@ from kpflo_core.revenus import (
     update_revenu,
     suggestions_for_income_category,  # stems revenus (_<Month Year>)
     default_revenu_row,  # ligne par défaut revenus (sans suffixe)
+    _month_key,
+    _month_human,
+    income_suggestions_for_category,
+    rev_update_form,
 )
 
 from kpflo_core.depenses import (
@@ -53,6 +63,16 @@ from kpflo_core.depenses import (
     delete_depense,
     suggestions_for_category,  # stems dépenses (_<Month Year>)
     default_depense_row,  # ligne par défaut dépenses (sans suffixe)
+    _month_key as dep_month_key,
+    _month_human as dep_month_human,
+    build_month_revenue_totals,
+    build_month_impots_totals,
+    revenue_total_net_for_month,
+    budget_rule_for_category,
+    ratio_status_color,
+    render_ratio_box,
+    expense_suggestions_for_category,
+    dep_update_form,
 )
 
 
@@ -66,41 +86,30 @@ from kpflo_core.storage_sqlite import (
     fetch_all_df_with_id,
     insert_transaction,
     _connect,
+    bulk_insert_transactions,
+    build_export_or_template_csv_sqlite,
+    # si tu en as besoin côté app :
+    _users_map_sqlite,
+    month_iter,
 )
 
-# Insère plusieurs transactions à la fois dans la base SQLite.
-# Chaque tuple représente une transaction complète :
+# ================================================
+#  DÉFINITION DES FONCTIONS PRINCIPALES
+#  Fonctions utilisées dans tout le tableau de bord
+# ================================================
+
+
+# --- Fonction : bulk_insert_transactions() ---
+# Cette fonction permet d’insérer plusieurs transactions d’un seul coup dans la base SQLite.
+# Chaque élément de la liste passée en argument correspond à une transaction complète :
 # (date, type, catégorie, libellé, montant, récurrence, date de création, identifiant utilisateur)
 
 
-def bulk_insert_transactions(rows: list[tuple]):
-    """
-    Insère plusieurs transactions en base d'un coup.
-
-    rows doit être une liste de tuples exactement de la forme :
-    (date, type, categorie, libelle, montant, recurrent, created_at, user_id)
-    """
-    if not rows:
-        return
-
-    con = _connect()
-    try:
-        cur = con.cursor()
-        cur.executemany(
-            """
-            INSERT INTO transactions
-            (date, type, categorie, libelle, montant, recurrent, created_at, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            rows,
-        )
-        con.commit()
-    finally:
-        con.close()
-
-
-# Charge les données de l'utilisateur depuis la base,
-# puis les normalise pour l'affichage dans Streamlit.
+# --- Fonction : load_user_df() ---
+# Charge toutes les transactions d’un utilisateur spécifique depuis la base SQLite.
+# Les données sont ensuite normalisées pour être prêtes à l’affichage et à l’analyse.
+# Grâce au décorateur @st.cache_data, le résultat est mis en cache pour éviter
+# de recharger inutilement les mêmes données à chaque interaction.
 
 
 @st.cache_data(show_spinner=False)
@@ -109,11 +118,12 @@ def load_user_df(user_id: int):
     return normalize_df(df)
 
 
-# Nettoie et harmonise le DataFrame :
-# - renomme les colonnes selon la convention de l'app,
-# - convertit les dates,
-# - met les montants négatifs pour les dépenses (OUT) et positifs pour les revenus (IN),
-# - ne garde que les colonnes essentielles : date, type, catégorie, montant.
+# --- Fonction : normalize_df() ---
+# Harmonise et nettoie le DataFrame avant l’analyse.
+# Elle renomme les colonnes selon la convention française (type, montant, catégorie),
+# convertit les dates au bon format, et standardise les montants :
+# revenus positifs (IN) et dépenses négatives (OUT).
+# Retourne un DataFrame minimal prêt pour le tableau de bord.
 def normalize_df(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     # Harmoniser les colonnes
@@ -138,91 +148,18 @@ def normalize_df(df: pd.DataFrame) -> pd.DataFrame:
     return df[["date", "type", "categorie", "montant"]]
 
 
-# Ensemble de fonctions pour la gestion des données :
-# - bulk_insert_transactions : insère les transactions dans la base
-# - load_user_df : charge les données de l'utilisateur
-# - normalize_df : nettoie et harmonise le DataFrame avant l'affichage
-
-# Fonctions utilitaires : elles seront appelées plus tard dans l'application
-
-
 #  ---------- Helpers (import/export) ----------
-# Fonctions utilitaires regroupées en haut du fichier :
+
 # - month_iter : génère une liste de mois glissants
+
+
 # - _users_map_sqlite : mappe les IDs utilisateurs vers leurs noms
+
+
 # - build_export_or_template_csv_sqlite : exporte la base ou crée un modèle CSV
-# - import_unified_csv_to_sqlite : importe un CSV unifié dans la base
-# En Python, on place les fonctions en début de fichier pour pouvoir les appeler plus bas.
 
 
-def month_iter(end_month: date, months: int = 36):
-    end = date(end_month.year, end_month.month, 1)
-    return [end - relativedelta(months=i) for i in range(months - 1, -1, -1)]
-
-
-def _users_map_sqlite():
-    dfu = list_users()
-    return {
-        int(r["id"]): (f'{r.get("prenom","")} {r["nom"]}').strip() or f'ID {r["id"]}'
-        for _, r in dfu.iterrows()
-    }
-
-
-def build_export_or_template_csv_sqlite(months=36) -> bytes:
-    """
-    Exporte toutes les transactions (tous users) au format unifié si base non vide.
-    Sinon, génère un modèle 36 mois (revenu/depense/epargne) pour tous les users.
-    Colonnes: user_id,user_name,date,kind,category,label,amount
-    """
-    users_map = _users_map_sqlite()
-    rows, non_empty = [], False
-
-    for uid in users_map.keys():
-        df = fetch_all_df(
-            user_id=uid
-        )  # date,type(IN/OUT),categorie,libelle,montant,recurrent
-        if df is not None and not df.empty:
-            non_empty = True
-            for _, r in df.iterrows():
-                rows.append(
-                    {
-                        "user_id": uid,
-                        "user_name": users_map[uid],
-                        "date": pd.to_datetime(r["date"]).date(),
-                        "kind": (
-                            "revenu" if str(r["type"]).upper() == "IN" else "depense"
-                        ),
-                        "category": r.get("categorie", ""),
-                        "label": r.get("libelle", ""),
-                        "amount": float(r.get("montant", 0) or 0),
-                    }
-                )
-
-    if not non_empty:
-        months_list = month_iter(date.today(), months=months)
-        for uid, uname in users_map.items():
-            for d in months_list:
-                for kind in ("revenu", "depense", "epargne"):
-                    rows.append(
-                        {
-                            "user_id": uid,
-                            "user_name": uname,
-                            "date": d,
-                            "kind": kind,
-                            "category": "" if kind != "epargne" else "Épargne",
-                            "label": "",
-                            "amount": 0.0,
-                        }
-                    )
-
-    df = pd.DataFrame(
-        rows,
-        columns=["user_id", "user_name", "date", "kind", "category", "label", "amount"],
-    )
-    df["date"] = pd.to_datetime(df["date"]).dt.date
-    buf = io.StringIO()
-    df.to_csv(buf, index=False)
-    return buf.getvalue().encode("utf-8")
+# - import_unified_csv_to_sqlite : importe un CSV unifié (chunks), option replace_all, insertion batch, refresh cache
 
 
 def import_unified_csv_to_sqlite(
@@ -356,6 +293,12 @@ def import_unified_csv_to_sqlite(
     return True
 
 
+#  CACHING DES DONNÉES (Revenus / Dépenses)
+
+# - cached_revenus_df : charge les revenus d’un utilisateur avec mise en cache
+# - cached_depenses_df : charge les dépenses d’un utilisateur avec mise en cache
+
+
 @st.cache_data(show_spinner=False)
 def cached_revenus_df(user_id: int):
     """Version mise en cache des revenus de l'utilisateur."""
@@ -368,22 +311,35 @@ def cached_depenses_df(user_id: int):
     return get_depenses_df(user_id)
 
 
+# ================================================
+#  CONFIGURATION INITIALE DE L'APPLICATION
+# ================================================
+
+
 # ---------- Config ----------
+# Paramètres de la page Streamlit (titre, icône, mise en page)
 st.set_page_config(page_title="KPFLO 🤑", page_icon="💧", layout="wide")
+
+# Initialisation de la base SQLite
 init_db()
 
 # ---------- State ----------
+# Définition des variables globales conservées dans st.session_state
+# pour gérer la connexion utilisateur et les formulaires dynamiques
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.current_user_id = None
+
+#  Initialiser les formulaires Revenus et Dépenses
 if "revenus_forms" not in st.session_state:
     st.session_state.revenus_forms = []
 
-# 👉 AJOUT ICI : initialiser les formulaires Dépenses
 if "depenses_forms" not in st.session_state or st.session_state.depenses_forms is None:
     st.session_state.depenses_forms = []
 
-# ---------- Header ----------
+# ================================================
+#  HEADER DE L’APPLICATION
+# ================================================
 
 # Header de l'application :
 # - colonne gauche : titre et sous-titre
@@ -580,7 +536,13 @@ with right:
                         st.error(str(e))
 
 
-# ---------- Chargement données ----------
+# ================================================
+#  CHARGEMENT DES DONNÉES UTILISATEUR
+# ================================================
+# Cette partie charge les transactions de l’utilisateur courant
+# à partir de la base SQLite, grâce à la fonction load_user_df().
+# Les données sont ensuite stockées dans st.session_state.df
+# pour être utilisées dans tout le tableau de bord.
 
 
 if "df" not in st.session_state:
@@ -649,20 +611,22 @@ if submitted:
                 st.sidebar.error("Import échoué. Vérifie le format des colonnes.")
 
 
-# ---------- Onglets principaux ----------
-# Interface à trois sections :
-# - 📈 Revenus
-# - 📉 Dépenses
-# - 📊 Budget
-# Chaque onglet affiche ses propres données et graphiques.
+# ================================================
+#  INTERFACE PRINCIPALE : ONGLET REVENUS / DÉPENSES / BUDGET
+# ================================================
+# On crée ici trois onglets principaux avec Streamlit :
+# - 📈 Revenus : pour visualiser et modifier les entrées d’argent
+# - 📉 Dépenses : pour suivre les sorties
+# - 📊 Budget : pour analyser le solde et les prévisions
 tab_revenus, tab_depenses, tab_budget = st.tabs(
     ["📈 Revenus", "📉 Dépenses", "📊 Budget"]
 )
 
 
-# =======================
-# SECTION : REVENUS 💶 (Année -> Mois -> Lignes)
-# =======================
+# ================================================
+#  SECTION : REVENUS  (Interface et style)
+# ================================================
+# Cette partie ouvre l’onglet "Revenus" :
 with tab_revenus:
     st.subheader("Ajoute tes revenus")
 
@@ -714,7 +678,12 @@ with tab_revenus:
         unsafe_allow_html=True,
     )
 
-    # ---------- HEADER : Sélecteur (gauche) + Mini-écran Total (droite) ----------
+    #  HEADER REVENUS : Sélecteur + Total prévisionnel
+
+    # Cette section crée l’en-tête de la page Revenus :
+    # - À gauche : un menu déroulant pour choisir le mode d’affichage (par mois ou par année).
+    # - À droite : un mini-récapitulatif qui affiche la somme totale des revenus.
+
     st.markdown('<div id="revenus-header">', unsafe_allow_html=True)
     header_left, header_right = st.columns([1, 5], vertical_alignment="center")
 
@@ -751,25 +720,9 @@ with tab_revenus:
 
     st.markdown("</div>", unsafe_allow_html=True)  # /revenus-header
 
-    # ---------- Données (utilisation de la version cachée) ----------
+    #  DONNÉES REVENUS + HELPERS LOCAUX
+
     df_revenus_all = cached_revenus_df(st.session_state.current_user_id)
-
-    # Helpers mois (local)
-    def _month_key(d):  # "YYYY-MM"
-        return pd.Timestamp(d).strftime("%Y-%m") if d else None
-
-    def _month_human(d):  # "October 2025"
-        try:
-            return pd.Timestamp(d).strftime("%B %Y")
-        except Exception:
-            return ""
-
-    # Suggesteur de libellés (suffixe mois)
-    def income_suggestions_for_category(cat: str, d) -> list[str]:
-        mois = _month_human(d)
-        stems = suggestions_for_income_category(cat)  # depuis kpflo_core/revenus.py
-        stems = stems or [cat if cat else "Revenu"]
-        return [f"{s}_{mois}" if mois else s for s in stems]
 
     # ---------- Mode "Mois" : un seul niveau (mois -> lignes) ----------
     if group_mode == "Mois" and not df_revenus_all.empty:
@@ -1071,37 +1024,6 @@ with tab_revenus:
                             "⚠️ Pour modifier ou supprimer une ligne, entrez son numéro de ligne ci-dessus."
                         )
 
-    # ---------- Callbacks internes (sélecteur non-éditable) ----------
-    def rev_update_form(
-        index, key_date, key_cat, key_lib_choice, key_lib_value, key_montant
-    ):
-        """Sync d'une ligne de formulaire quand un champ change (cat/date/lib/€)."""
-        cur_date = st.session_state.get(key_date)
-        cur_cat = st.session_state.get(key_cat)
-        cur_choice = st.session_state.get(key_lib_choice, "")
-        cur_montant = st.session_state.get(key_montant, 0.0)
-
-        # Recalcule la liste selon (catégorie, mois)
-        opts = income_suggestions_for_category(cur_cat, cur_date)
-        if cur_choice not in opts and opts:
-            st.session_state[key_lib_choice] = opts[0]
-            cur_choice = opts[0]
-
-        # libellé = choix (non éditable)
-        st.session_state[key_lib_value] = cur_choice
-
-        # push dans la structure tampon
-        if index < len(st.session_state.revenus_forms):
-            st.session_state.revenus_forms[index].update(
-                {
-                    "date": cur_date,
-                    "categorie": cur_cat,
-                    "libelle": st.session_state[key_lib_value],
-                    "montant": cur_montant,
-                }
-            )
-        st.session_state.revenus_forms = st.session_state.revenus_forms[:]  # rerender
-
     # ---------- Saisie dynamique des nouvelles lignes ----------
     edited_rows = []
     if st.session_state.revenus_forms:
@@ -1354,161 +1276,7 @@ with tab_depenses:
         )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- Helpers (mois + revenu NET du mois + règles 50/30/20) ----------
-    def _month_key(d):  # "YYYY-MM"
-        return pd.Timestamp(d).strftime("%Y-%m") if d else None
-
-    def _month_human(d):  # "October 2025"
-        try:
-            return pd.Timestamp(d).strftime("%B %Y")
-        except Exception:
-            return ""
-
     revenus_df_all = cached_revenus_df(st.session_state.current_user_id)
-
-    @st.cache_data(show_spinner=False)
-    def build_month_revenue_totals(df_revenus):
-        if df_revenus is None or df_revenus.empty:
-            return {}
-        tmp = df_revenus.copy()
-        tmp["mk"] = pd.to_datetime(tmp["date"]).dt.strftime("%Y-%m")
-        return tmp.groupby("mk")["montant"].sum().to_dict()
-
-    @st.cache_data(show_spinner=False)
-    def build_month_impots_totals(df_depenses):
-        """Somme des dépenses de la catégorie 'Impôts & taxes' par mois (pour revenu NET)."""
-        if df_depenses is None or df_depenses.empty:
-            return {}
-        tmp = df_depenses[df_depenses["categorie"] == "Impôts & taxes"].copy()
-        if tmp.empty:
-            return {}
-        tmp["mk"] = pd.to_datetime(tmp["date"]).dt.strftime("%Y-%m")
-        return tmp.groupby("mk")["montant"].sum().to_dict()
-
-    rev_month_totals_brut = build_month_revenue_totals(revenus_df_all)
-    impots_month_totals = build_month_impots_totals(df_depenses_all)
-
-    def revenue_total_net_for_month(d):
-        """Revenu NET du mois (50/30/20) = revenus - 'Impôts & taxes' du même mois."""
-        mk = _month_key(d)
-        if not mk:
-            return 0.0
-        brut = float(rev_month_totals_brut.get(mk, 0.0))
-        imp = float(impots_month_totals.get(mk, 0.0))
-        return max(brut - imp, 0.0)
-
-    # Cibles & caps par catégorie (sur % du revenu NET du mois)
-    CATEGORY_BUDGET_RULES = {
-        "Logement": {"target": 30.0, "cap": 35.0},
-        "Alimentation & boissons non alcoolisées": {"target": 11.0, "cap": 15.0},
-        "Transport": {"target": 5.0, "cap": 12.0},
-        "Santé": {"target": 2.0, "cap": 6.0},
-        "Communications": {"target": 2.0, "cap": 5.0},
-        "Ameublement & équipement ménager": {"target": 3.0, "cap": 6.0},
-        "Habillement & chaussures": {"target": 3.0, "cap": 6.0},
-        "Loisirs & culture": {"target": 6.0, "cap": 10.0},
-        "Restaurants & hôtels": {"target": 3.0, "cap": 6.0},
-        "Biens & services divers": {"target": 3.0, "cap": 6.0},
-        "Boissons alcoolisées & tabac": {"target": 1.0, "cap": 2.0},
-        "Enfants & famille": {"target": 5.0, "cap": 10.0},
-        "Animaux de compagnie": {"target": 1.0, "cap": 3.0},
-        "Dépenses exceptionnelles": {"target": 5.0, "cap": None},  # enveloppe souple
-        "Frais bancaires & services financiers": {"target": 0.5, "cap": 1.0},
-        "Assurances": {"target": 2.0, "cap": 4.0},
-        "__DEFAULT__": {"target": 15.0, "cap": 20.0},
-    }
-
-    def budget_rule_for_category(cat: str) -> tuple[float, float | None]:
-        if not cat:
-            rule = CATEGORY_BUDGET_RULES["__DEFAULT__"]
-        else:
-            rule = CATEGORY_BUDGET_RULES.get(cat, CATEGORY_BUDGET_RULES["__DEFAULT__"])
-        return rule["target"], rule["cap"]
-
-    def ratio_status_color(pct: float, target: float, cap: float | None) -> str:
-        if target <= 0:
-            return "ratio-na"
-        if pct <= target + 1e-9:
-            return "ratio-ok"
-        if cap is None:
-            return "ratio-warn"  # pas de rouge si pas de cap
-        if pct <= cap + 1e-9:
-            return "ratio-warn"
-        return "ratio-bad"
-
-    # ------ Affichage court du ratio : "Seuil X%" (+ tooltip détail cible/cap) ------
-    def render_ratio_box(date_, categorie, montant):
-        """Affiche la box de ratio avec 'Seuil X%' en sous-texte (couleurs via cible/cap)."""
-        rev_net = revenue_total_net_for_month(date_)
-        if rev_net <= 0:
-            st.markdown(
-                "<div class='ratio-box ratio-na'>n/a<span class='ratio-sub'>revenu net mensuel indisponible</span></div>",
-                unsafe_allow_html=True,
-            )
-            return
-
-        pct = (float(montant) / rev_net) * 100.0
-        target, cap = budget_rule_for_category(categorie)
-        status = ratio_status_color(pct, target, cap)
-        ratio_txt = f"{pct:.0f}%"
-        sub_txt = f"sur {_month_human(date_)} • Seuil {target:.0f}%"
-        cap_txt = "—" if cap is None else f"{cap:.0f}%"
-        title_attr = f"title='Cible {target:.0f}% • Cap {cap_txt}'"
-
-        st.markdown(
-            f"<div class='ratio-box {status}' {title_attr}>{ratio_txt}"
-            f"<span class='ratio-sub'>{sub_txt}</span></div>",
-            unsafe_allow_html=True,
-        )
-
-    # =================================================
-    # Saisie dynamique (libellé via depenses.py + ratio live)
-    # =================================================
-
-    def expense_suggestions_for_category(cat: str, d) -> list[str]:
-        """
-        Utilise suggestions_for_category(cat) pour obtenir des 'stems',
-        puis suffixe le mois (ex. 'Eau_October 2025') et ajoute 'Autre_<Month Year>'.
-        """
-        mois = _month_human(d)  # ex. "October 2025"
-        stems = suggestions_for_category(cat)  # ex. ["Eau", "Électricité", "Gaz"]
-        stems = stems or [cat if cat else "Dépense"]
-        options = [f"{s}_{mois}" if mois else s for s in stems]
-        # Autre (non-éditable, sans "…")
-        autre = f"Autre_{mois}" if mois else "Autre"
-        if autre not in options:
-            options.append(autre)
-        return options
-
-    def dep_update_form(
-        index, key_date, key_cat, key_lib_choice, key_lib_value, key_amt
-    ):
-        """
-        Sync d'une ligne de formulaire :
-        - recalcul des options quand (catégorie, mois) change
-        - libellé = choix du select (non éditable)
-        """
-        cur_date = st.session_state.get(key_date)
-        cur_cat = st.session_state.get(key_cat)
-        cur_choice = st.session_state.get(key_lib_choice, "")
-        cur_amt = st.session_state.get(key_amt, 0.0)
-
-        opts = expense_suggestions_for_category(cur_cat, cur_date)
-        if cur_choice not in opts and opts:
-            st.session_state[key_lib_choice] = opts[0]
-            cur_choice = opts[0]
-
-        st.session_state[key_lib_value] = cur_choice
-
-        if index < len(st.session_state.depenses_forms):
-            st.session_state.depenses_forms[index]["date"] = cur_date
-            st.session_state.depenses_forms[index]["categorie"] = cur_cat
-            st.session_state.depenses_forms[index]["libelle"] = st.session_state[
-                key_lib_value
-            ]
-            st.session_state.depenses_forms[index]["montant"] = cur_amt
-
-        st.session_state.depenses_forms = st.session_state.depenses_forms
 
     # ---------- Groupes (Mois / Année -> Mois -> Lignes) ----------
     if dep_group_mode == "Mois" and not df_depenses_all.empty:
@@ -1543,7 +1311,13 @@ with tab_depenses:
                 for cat in m_df["categorie"].unique():
                     cat_total = float(m_df[m_df["categorie"] == cat]["montant"].sum())
                     st.markdown(f"<b>{cat}</b>:", unsafe_allow_html=True)
-                    render_ratio_box(m_df["date"].iloc[0], cat, cat_total)
+                    render_ratio_box(
+                        m_df["date"].iloc[0],
+                        cat,
+                        cat_total,
+                        revenus_df_all,
+                        df_depenses_all,
+                    )
 
                 # Lignes du mois (optimisées avec st.dataframe)
                 m_df = (
@@ -1702,7 +1476,13 @@ with tab_depenses:
                                 m_df[m_df["categorie"] == cat]["montant"].sum()
                             )
                             st.markdown(f"<b>{cat}</b>:", unsafe_allow_html=True)
-                            render_ratio_box(m_df["date"].iloc[0], cat, cat_total)
+                            render_ratio_box(
+                                m_df["date"].iloc[0],
+                                cat,
+                                cat_total,
+                                revenus_df_all,
+                                df_depenses_all,
+                            )
 
                         # Lignes du mois (optimisées avec st.dataframe)
                         m_df = (
@@ -1902,7 +1682,9 @@ with tab_depenses:
             cur_date = st.session_state.get(key_date, initial_date)
             cur_cat = st.session_state.get(key_cat, initial_cat)
             cur_amt = float(st.session_state.get(key_amt, initial_amt))
-            render_ratio_box(cur_date, cur_cat, cur_amt)
+            render_ratio_box(
+                cur_date, cur_cat, cur_amt, revenus_df_all, df_depenses_all
+            )
 
         # SUPPRIMER LA LIGNE DU FORMULAIRE
         with cols[5]:
@@ -1941,6 +1723,7 @@ with tab_depenses:
     st.session_state.depenses_forms = edited_rows_dep
 
     # ---------- Boutons bas ----------
+    #  DÉPENSES – ACTIONS (bas de section)
     btn_left, btn_right = st.columns([3, 1])
 
     with btn_left:
@@ -1987,7 +1770,9 @@ with tab_depenses:
                 st.error(f"Erreur : {e}")
 
 
-# ====== BUDGET / DASHBOARD ======
+# ================================================
+#  BUDGET / DASHBOARD
+# ================================================
 with tab_budget:
 
     # --- compute_month_basics local ---
@@ -2028,188 +1813,13 @@ with tab_budget:
     )
 
     # --- State ---
+    #  BUDGET – INITIALISATION DU STATE
     if "budget_view_mode" not in st.session_state:
         st.session_state.budget_view_mode = "mois"
     if "budget_selected_month_key" not in st.session_state:
         st.session_state.budget_selected_month_key = None
     if "budget_selected_year" not in st.session_state:
         st.session_state.budget_selected_year = None
-
-    # --- Fonctions utilitaires ---
-    def slice_df_for_month(df: pd.DataFrame, year: int, month: int) -> pd.DataFrame:
-        if df.empty:
-            return df.iloc[0:0]
-        start = date(year, month, 1)
-        last_day = monthrange(year, month)[1]
-        end = date(year, month, last_day)
-        d = df.copy()
-        d["date"] = pd.to_datetime(d["date"], errors="coerce")
-        mask = (d["date"].dt.date >= start) & (d["date"].dt.date <= end)
-        return d.loc[mask].copy()
-
-    def slice_df_for_year(df: pd.DataFrame, year: int) -> pd.DataFrame:
-        if df.empty:
-            return df.iloc[0:0]
-        d = df.copy()
-        d["date"] = pd.to_datetime(d["date"], errors="coerce")
-        mask = d["date"].dt.year == year
-        return d.loc[mask].copy()
-
-    def compute_totals(df: pd.DataFrame) -> dict:
-        if df.empty:
-            return {"revenus": 0.0, "depenses": 0.0, "solde": 0.0}
-        revenus = float(df.loc[df["type"] == "IN", "montant"].sum())
-        depenses = float(-df.loc[df["type"] == "OUT", "montant"].sum())
-        return {"revenus": revenus, "depenses": depenses, "solde": revenus - depenses}
-
-    def build_year_timeseries(df_year: pd.DataFrame) -> pd.DataFrame:
-        if df_year.empty:
-            return pd.DataFrame(columns=["mois", "revenus", "depenses"])
-        d = df_year.copy()
-        d["date"] = pd.to_datetime(d["date"], errors="coerce")
-        d["mois"] = d["date"].dt.month
-
-        revenus_by_month = (
-            d[d["type"] == "IN"].groupby("mois")["montant"].sum().rename("revenus")
-        )
-        depenses_by_month = (
-            d[d["type"] == "OUT"]
-            .assign(montant_abs=lambda x: x["montant"].abs())
-            .groupby("mois")["montant_abs"]
-            .sum()
-            .rename("depenses")
-        )
-
-        merged = (
-            pd.concat([revenus_by_month, depenses_by_month], axis=1)
-            .fillna(0.0)
-            .reset_index()
-        )
-        mois_labels = {
-            1: "Jan",
-            2: "Fév",
-            3: "Mar",
-            4: "Avr",
-            5: "Mai",
-            6: "Juin",
-            7: "Juil",
-            8: "Août",
-            9: "Sept",
-            10: "Oct",
-            11: "Nov",
-            12: "Déc",
-        }
-        merged["mois_label"] = merged["mois"].map(mois_labels)
-        return merged
-
-    def build_coach_text_year(
-        df_year: pd.DataFrame,
-        year_totals: dict,
-        s_year_split: dict,
-        year_forecast: dict,
-        target_year: int,
-    ) -> str:
-        revenus_ytd = year_totals["revenus"]
-        depenses_ytd = year_totals["depenses"]
-        solde_ytd = year_totals["solde"]
-
-        worst_month_name = None
-        worst_month_value = None
-        if not df_year.empty:
-            d = df_year.copy()
-            d["date"] = pd.to_datetime(d["date"], errors="coerce")
-            d["mois_num"] = d["date"].dt.month
-            d["mois_label"] = d["date"].dt.strftime("%B")
-
-            depmois = (
-                d[d["type"] == "OUT"]
-                .assign(absval=lambda x: x["montant"].abs())
-                .groupby(["mois_num", "mois_label"], as_index=False)["absval"]
-                .sum()
-                .sort_values("absval", ascending=False)
-            )
-
-            if not depmois.empty:
-                row0 = depmois.iloc[0]
-                mois_lbl = row0["mois_label"]
-                worst_month_value = row0["absval"]
-                MONTHS_FR = {
-                    "January": "janvier",
-                    "February": "février",
-                    "March": "mars",
-                    "April": "avril",
-                    "May": "mai",
-                    "June": "juin",
-                    "July": "juillet",
-                    "August": "août",
-                    "September": "septembre",
-                    "October": "octobre",
-                    "November": "novembre",
-                    "December": "décembre",
-                }
-                worst_month_name = MONTHS_FR.get(mois_lbl, mois_lbl)
-
-        pct_besoins = float(s_year_split.get("50", 0.0))
-        pct_envies = float(s_year_split.get("30", 0.0))
-        pct_epargne = float(s_year_split.get("20", 0.0))
-
-        def badge_envies(p):
-            if p <= 30:
-                return "OK"
-            if p <= 35:
-                return "un peu élevé"
-            return "à maîtriser"
-
-        def badge_epargne(p):
-            if p >= 20:
-                return "très bien"
-            if p >= 10:
-                return "peut mieux faire"
-            return "insuffisant"
-
-        envies_comment = badge_envies(pct_envies)
-        epargne_comment = badge_epargne(pct_epargne)
-
-        proj_revenus = year_forecast.get("revenus", 0.0)
-        proj_depenses = year_forecast.get("depenses", 0.0)
-        proj_solde = year_forecast.get("solde", 0.0)
-
-        parts = []
-        parts.append(
-            f"Depuis le début de {target_year}, tu as encaissé <b>{revenus_ytd:,.0f} €</b> "
-            f"et dépensé <b>{depenses_ytd:,.0f} €</b>, soit un solde actuel de "
-            f"<b>{solde_ytd:,.0f} €</b>."
-        )
-        if worst_month_name:
-            parts.append(
-                f"Ton mois le plus coûteux est <b>{worst_month_name}</b> "
-                f"avec environ <b>{worst_month_value:,.0f} €</b> de sorties."
-            )
-        parts.append(
-            "Sur l'année, ta répartition ressemble à : "
-            f"<b>Besoins {pct_besoins:.1f}%</b>, "
-            f"<b>Envies {pct_envies:.1f}%</b> ({envies_comment}), "
-            f"<b>Épargne {pct_epargne:.1f}%</b> ({epargne_comment})."
-        )
-        parts.append(
-            f"Si tu gardes ce rythme, la fin {target_year} ressemble à "
-            f"<b>{proj_solde:,.0f} €</b> de solde annuel "
-            f"({proj_revenus:,.0f} € de revenus / {proj_depenses:,.0f} € de dépenses)."
-        )
-        if pct_epargne >= 20:
-            parts.append(
-                "Très bon signal : tu dégages une vraie capacité d'épargne sur l'année."
-            )
-        elif pct_envies > 35:
-            parts.append(
-                "Ton point d'attention principal reste les dépenses plaisir / envies. Tu peux viser < 30%."
-            )
-        else:
-            parts.append(
-                "Tu es globalement sur une trajectoire équilibrée. L'idée maintenant : tenir jusqu'à décembre."
-            )
-
-        return "<br><br>".join(parts).replace(",", " ")
 
     # --- Calculs : préparation des mois disponibles ---
     df_all_dates = st.session_state.df.copy()

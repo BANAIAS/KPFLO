@@ -35,6 +35,33 @@ EXPENSE_CATEGORIES = [
     "Épargne de précaution / projets",
 ]
 
+# ================================================
+#  RÈGLES DE BUDGET PAR CATÉGORIE
+# ================================================
+# Chaque catégorie a une cible et un plafond (% du revenu total)
+# Ces valeurs servent dans l’app principale pour les ratios Dépenses.
+
+CATEGORY_BUDGET_RULES = {
+    "Logement": {"target": 30.0, "cap": 35.0},
+    "Alimentation & boissons non alcoolisées": {"target": 11.0, "cap": 15.0},
+    "Transport": {"target": 5.0, "cap": 12.0},
+    "Santé": {"target": 2.0, "cap": 6.0},
+    "Communications": {"target": 2.0, "cap": 5.0},
+    "Ameublement & équipement ménager": {"target": 3.0, "cap": 6.0},
+    "Habillement & chaussures": {"target": 3.0, "cap": 6.0},
+    "Loisirs & culture": {"target": 6.0, "cap": 10.0},
+    "Restaurants & hôtels": {"target": 3.0, "cap": 6.0},
+    "Biens & services divers": {"target": 3.0, "cap": 6.0},
+    "Boissons alcoolisées & tabac": {"target": 1.0, "cap": 2.0},
+    "Enfants & famille": {"target": 5.0, "cap": 10.0},
+    "Animaux de compagnie": {"target": 1.0, "cap": 3.0},
+    "Dépenses exceptionnelles": {"target": 5.0, "cap": None},
+    "Frais bancaires & services financiers": {"target": 0.5, "cap": 1.0},
+    "Assurances": {"target": 2.0, "cap": 4.0},
+    "__DEFAULT__": {"target": 15.0, "cap": 20.0},
+}
+
+
 # Répartition 50/30/20 (règle conseillée)
 # ⚠️ Les libellés doivent correspondre EXACTEMENT à tes catégories de dépenses.
 

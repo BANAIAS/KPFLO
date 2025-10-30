@@ -2,7 +2,12 @@
 import pandas as pd
 from datetime import date
 from typing import List, Dict
-from .storage_sqlite import insert_transaction, delete_transaction, fetch_all_df_with_id, update_transaction
+from .storage_sqlite import (
+    insert_transaction,
+    delete_transaction,
+    fetch_all_df_with_id,
+    update_transaction,
+)
 from .categories import INCOME_CATEGORIES
 
 # ============== Libellés (stems) pour le sélecteur Revenus ==============
@@ -17,7 +22,6 @@ INCOME_LABEL_SUGGESTIONS: Dict[str, List[str]] = {
         "Prime / bonus",
         "Autres revenus professionnels",
     ],
-
     # 2. Revenus financiers
     "Revenus financiers": [
         "Intérêts bancaires",
@@ -28,7 +32,6 @@ INCOME_LABEL_SUGGESTIONS: Dict[str, List[str]] = {
         "Plus-values vente d’actifs (voiture, matériel, etc.)",
         "Autres revenus financiers",
     ],
-
     # 3. Revenus sociaux & aides
     "Revenus sociaux & aides": [
         "Pension alimentaire (reçue)",
@@ -39,7 +42,6 @@ INCOME_LABEL_SUGGESTIONS: Dict[str, List[str]] = {
         "Indemnités chômage",
         "Autres aides sociales",
     ],
-
     # 4. Revenus exceptionnels
     "Revenus exceptionnels": [
         "Héritage",
@@ -52,9 +54,11 @@ INCOME_LABEL_SUGGESTIONS: Dict[str, List[str]] = {
     ],
 }
 
+
 def suggestions_for_income_category(category: str) -> List[str]:
     """Retourne la liste de 'stems' (libellés racine) pour la catégorie de revenus."""
     return INCOME_LABEL_SUGGESTIONS.get(category, [category] if category else [])
+
 
 # (Optionnel) fournir une ligne par défaut si ton bouton "Nouveau revenu" en a besoin
 def default_revenu_row(categories: List[str], d: date) -> dict:
@@ -62,6 +66,7 @@ def default_revenu_row(categories: List[str], d: date) -> dict:
     stem = (INCOME_LABEL_SUGGESTIONS.get(cat) or [cat])[0]
     # On laisse la SECTION suffixer avec _<Month Year> pour cohérence UI
     return {"date": d, "categorie": cat, "libelle": stem, "montant": 0.0}
+
 
 # ================== Fonctions existantes (conservées) ===================
 def generate_libelle(categorie: str, input_date: date) -> str:
@@ -71,6 +76,7 @@ def generate_libelle(categorie: str, input_date: date) -> str:
     base = categorie if categorie else "Revenu"
     return f"{base}_{month_name} {year}"
 
+
 def get_revenus_df(user_id: int) -> pd.DataFrame:
     df = fetch_all_df_with_id(user_id)
     df_revenus = df[df["type"] == "IN"].copy()
@@ -78,35 +84,116 @@ def get_revenus_df(user_id: int) -> pd.DataFrame:
     df_revenus["montant"] = df_revenus["montant"].abs()
     return df_revenus
 
+
 def get_revenus_summary(user_id: int) -> float:
     df_revenus = get_revenus_df(user_id)
     return df_revenus["montant"].sum() if not df_revenus.empty else 0.0
+
 
 def get_revenus_preview_summary(user_id: int, temp_forms: list[dict]) -> float:
     total_enregistre = get_revenus_summary(user_id)
     total_temp = sum(form.get("montant", 0.0) for form in temp_forms)
     return total_enregistre + total_temp
 
+
 def validate_revenu_row(row: dict) -> bool:
-    return (row["libelle"].strip() != "" and row["montant"] > 0 and row["categorie"] in INCOME_CATEGORIES)
+    return (
+        row["libelle"].strip() != ""
+        and row["montant"] > 0
+        and row["categorie"] in INCOME_CATEGORIES
+    )
+
 
 def save_revenus_edits(edited_rows: list[dict], user_id: int):
     for row in edited_rows:
         if not validate_revenu_row(row):
             continue
         insert_transaction(
-            row["date"], "IN", row["categorie"], row["libelle"],
-            float(row["montant"]), recurrent=False, user_id=user_id
+            row["date"],
+            "IN",
+            row["categorie"],
+            row["libelle"],
+            float(row["montant"]),
+            recurrent=False,
+            user_id=user_id,
         )
+
 
 def delete_revenu(tx_id: int, user_id: int):
     delete_transaction(tx_id, user_id)
+
 
 def update_revenu(tx_id: int, row: dict, user_id: int):
     """Met à jour un revenu existant via update_transaction."""
     if not validate_revenu_row(row):
         raise ValueError("Données invalides pour mise à jour.")
     update_transaction(
-        tx_id, row["date"], "IN", row["categorie"], row["libelle"],
-        float(row["montant"]), recurrent=False, user_id=user_id
+        tx_id,
+        row["date"],
+        "IN",
+        row["categorie"],
+        row["libelle"],
+        float(row["montant"]),
+        recurrent=False,
+        user_id=user_id,
     )
+
+
+import pandas as pd
+import streamlit as st
+from kpflo_core.revenus import suggestions_for_income_category
+
+
+# 🔹 Formate une date en clé technique "YYYY-MM"
+def _month_key(d):
+    return pd.Timestamp(d).strftime("%Y-%m") if d else None
+
+
+# 🔹 Formate une date en version lisible "October 2025"
+def _month_human(d):
+    try:
+        return pd.Timestamp(d).strftime("%B %Y")
+    except Exception:
+        return ""
+
+
+# 🔹 Génère une liste de suggestions de libellés revenus selon la catégorie et le mois
+def income_suggestions_for_category(cat: str, d) -> list[str]:
+    mois = _month_human(d)
+    stems = suggestions_for_income_category(cat)  # depuis revenus.py principal
+    stems = stems or [cat if cat else "Revenu"]
+    return [f"{s}_{mois}" if mois else s for s in stems]
+
+
+# 🔹 Callback interne : synchronise les champs du formulaire "revenus" quand l’utilisateur modifie une case
+def rev_update_form(
+    index, key_date, key_cat, key_lib_choice, key_lib_value, key_montant
+):
+    """Met à jour une ligne du formulaire revenus (date, catégorie, libellé, montant)."""
+    cur_date = st.session_state.get(key_date)
+    cur_cat = st.session_state.get(key_cat)
+    cur_choice = st.session_state.get(key_lib_choice, "")
+    cur_montant = st.session_state.get(key_montant, 0.0)
+
+    # Recalcule les suggestions selon la catégorie et le mois sélectionné
+    opts = income_suggestions_for_category(cur_cat, cur_date)
+    if cur_choice not in opts and opts:
+        st.session_state[key_lib_choice] = opts[0]
+        cur_choice = opts[0]
+
+    # Le libellé final devient le choix sélectionné (non éditable)
+    st.session_state[key_lib_value] = cur_choice
+
+    # Met à jour la ligne correspondante dans la liste temporaire de formulaires
+    if index < len(st.session_state.revenus_forms):
+        st.session_state.revenus_forms[index].update(
+            {
+                "date": cur_date,
+                "categorie": cur_cat,
+                "libelle": st.session_state[key_lib_value],
+                "montant": cur_montant,
+            }
+        )
+
+    # Force Streamlit à re-rendre la section revenus (utile pour voir les changements)
+    st.session_state.revenus_forms = st.session_state.revenus_forms[:]
