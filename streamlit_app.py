@@ -1,31 +1,21 @@
-# ================================================
-#  Streamlit App – Tableau de bord financier KPFLO
-#  Interface principale : revenus, dépenses, budget
-#  Gère l’affichage, les interactions et la logique
-#  s’appuie sur les modules : revenus.py, depenses.py,
-#  budget.py, categories.py et storage_sqlite.py
-# ================================================
+# ======================================================
+#  KPFLO – App Streamlit : interface (revenus, dépenses, budget)
+#  Affiche l’UI, orchestre les interactions, s’appuie sur kpflo_core/*
+# ======================================================
 
-# --- Standard library ---
-import os
-import io
-import hashlib
-from datetime import date, datetime
-from calendar import monthrange
-from pathlib import Path
+# --- Standard library (utilitaires légers) ---
+from datetime import date  # dates simples pour l’UI et les filtres
+from pathlib import Path  # chemins locaux (export/import si besoin)
+import hashlib  # hachage basique (ex: clés cache, sécurité légère)
 
-# --- Third-party libraries ---
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-from dateutil.relativedelta import relativedelta
+# --- Third-party (framework + data + charts) ---
+import streamlit as st  # framework UI
+import pandas as pd  # tables de données
+import numpy as np  # calculs numériques utilitaires
+import plotly.express as px  # graphiques interactifs
 
-
-# --- Internal modules (notre code KPFLO) ---
-from kpflo_core import budget  # module complet si on l'utilise tel quel
-
-from kpflo_core.budget import (
+# --- Internal modules (kpflo_core) ---
+from kpflo_core.budget import (  # calculs budget + projections + textes coach
     compute_summary,
     predict_end_of_month,
     predict_end_of_year,
@@ -38,276 +28,156 @@ from kpflo_core.budget import (
     build_coach_text_year,
 )
 
-from kpflo_core.categories import (
+from kpflo_core.categories import (  # référentiels : catégories & validations
     INCOME_CATEGORIES,
     EXPENSE_CATEGORIES,
-    CATEGORY_BUDGET_RULES,
 )
 
-from kpflo_core.revenus import (
+from kpflo_core.revenus import (  # logique revenus + callbacks UI
     get_revenus_df,
     delete_revenu,
     get_revenus_preview_summary,
     update_revenu,
-    suggestions_for_income_category,  # stems revenus (_<Month Year>)
-    default_revenu_row,  # ligne par défaut revenus (sans suffixe)
-    _month_key,
-    _month_human,
+    default_revenu_row,  # ligne par défaut (sans suffixe mois)
+    _month_human,  # "October 2025" pour suffixer les libellés
     income_suggestions_for_category,
     rev_update_form,
 )
 
-from kpflo_core.depenses import (
+from kpflo_core.depenses import (  # logique dépenses + ratios + callbacks UI
     get_depenses_df,
     save_depenses_edits,
     delete_depense,
-    suggestions_for_category,  # stems dépenses (_<Month Year>)
-    default_depense_row,  # ligne par défaut dépenses (sans suffixe)
-    _month_key as dep_month_key,
-    _month_human as dep_month_human,
-    build_month_revenue_totals,
-    build_month_impots_totals,
-    revenue_total_net_for_month,
-    budget_rule_for_category,
-    ratio_status_color,
-    render_ratio_box,
+    default_depense_row,  # ligne par défaut (sans suffixe mois)
+    render_ratio_box,  # box d’indicateur colorée
     expense_suggestions_for_category,
     dep_update_form,
 )
 
-
-from kpflo_core.storage_sqlite import (
+from kpflo_core.storage_sqlite import (  # accès DB + export/import
     init_db,
     list_users,
     create_user,
     validate_user,
     ensure_default_user,
-    fetch_all_df,
     fetch_all_df_with_id,
     insert_transaction,
-    _connect,
+    _connect,  # usage ponctuel (ex: bulk ops)
     bulk_insert_transactions,
     build_export_or_template_csv_sqlite,
-    # si tu en as besoin côté app :
-    _users_map_sqlite,
-    month_iter,
 )
 
+
 # ================================================
-#  DÉFINITION DES FONCTIONS PRINCIPALES
-#  Fonctions utilisées dans tout le tableau de bord
+#  FONCTIONS PRINCIPALES DU TABLEAU DE BORD
+#  (chargement, import et cache des données)
 # ================================================
-
-
-# --- Fonction : bulk_insert_transactions() ---
-# Cette fonction permet d’insérer plusieurs transactions d’un seul coup dans la base SQLite.
-# Chaque élément de la liste passée en argument correspond à une transaction complète :
-# (date, type, catégorie, libellé, montant, récurrence, date de création, identifiant utilisateur)
-
-
-# --- Fonction : load_user_df() ---
-# Charge toutes les transactions d’un utilisateur spécifique depuis la base SQLite.
-# Les données sont ensuite normalisées pour être prêtes à l’affichage et à l’analyse.
-# Grâce au décorateur @st.cache_data, le résultat est mis en cache pour éviter
-# de recharger inutilement les mêmes données à chaque interaction.
 
 
 @st.cache_data(show_spinner=False)
 def load_user_df(user_id: int):
+    """Charge et normalise les données d’un utilisateur."""
     df = fetch_all_df_with_id(user_id)
     return normalize_df(df)
 
 
-# --- Fonction : normalize_df() ---
-# Harmonise et nettoie le DataFrame avant l’analyse.
-# Elle renomme les colonnes selon la convention française (type, montant, catégorie),
-# convertit les dates au bon format, et standardise les montants :
-# revenus positifs (IN) et dépenses négatives (OUT).
-# Retourne un DataFrame minimal prêt pour le tableau de bord.
 def normalize_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Nettoie et harmonise les colonnes et les signes."""
     df = df.copy()
-    # Harmoniser les colonnes
     if "type" not in df.columns and "kind" in df.columns:
         df["type"] = np.where(df["kind"].str.lower() == "revenu", "IN", "OUT")
     if "montant" not in df.columns and "amount" in df.columns:
         df["montant"] = df["amount"].astype(float)
     if "categorie" not in df.columns and "category" in df.columns:
         df["categorie"] = df["category"]
-
-    # Dates
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-    # Standardiser les signes : OUT -> négatif ; IN -> positif
-    # (si ton CSV OUT est déjà négatif, ça ne changera rien ; s'il est positif, on le rend négatif)
     df.loc[df["type"] == "OUT", "montant"] = -df.loc[
         df["type"] == "OUT", "montant"
     ].abs()
     df.loc[df["type"] == "IN", "montant"] = df.loc[df["type"] == "IN", "montant"].abs()
-
-    # Colonnes utiles minimales
     return df[["date", "type", "categorie", "montant"]]
 
 
-#  ---------- Helpers (import/export) ----------
-
-# - month_iter : génère une liste de mois glissants
-
-
-# - _users_map_sqlite : mappe les IDs utilisateurs vers leurs noms
-
-
-# - build_export_or_template_csv_sqlite : exporte la base ou crée un modèle CSV
-
-
-# - import_unified_csv_to_sqlite : importe un CSV unifié (chunks), option replace_all, insertion batch, refresh cache
-
-
-def import_unified_csv_to_sqlite(
-    file,
-    user_id: int,
-    replace_all: bool = False,
-    chunksize: int = 5000,
-):
-    """
-    Importe un CSV unifié (colonnes: user_id,date,kind,category,label,amount)
-    puis recharge la session avec les nouvelles données.
-
-    - Lecture par chunks pour limiter la RAM
-    - Insertion bulk pour aller vite
-    - Option replace_all: purge les anciennes lignes des user_id présents dans le CSV
-    """
-    import pandas as pd
+def import_unified_csv_to_sqlite(file, user_id: int, replace_all=False, chunksize=5000):
+    """Importe un CSV global dans la base SQLite, avec gestion du cache."""
+    import pandas as pd, io
     from datetime import datetime
-    import io
 
-    # 0. Lecture robuste du fichier Streamlit
-    #    -> file est un UploadedFile Streamlit, qu'on doit cloner en BytesIO
+    # Lecture du fichier uploadé
     if hasattr(file, "getvalue"):
-        raw = file.getvalue()
-        file_buf = io.BytesIO(raw)
+        file_buf = io.BytesIO(file.getvalue())
     else:
-        # si déjà un buffer ou un fichier-like
         file_buf = file
 
-    # 1. Si replace_all=True, on purge les transactions EXISTANTES
-    #    pour tous les user_id présents dans le CSV AVANT réinsertion.
+    # Purge des données si remplacement complet
     if replace_all:
-        # On lit juste la colonne user_id par chunks, pour ne pas tout charger
         file_buf.seek(0)
         user_ids = set()
         for chunk in pd.read_csv(file_buf, usecols=["user_id"], chunksize=chunksize):
             user_ids.update(chunk["user_id"].astype(int).unique())
-
         if user_ids:
             with _connect() as con:
-                cur = con.cursor()
-                q = "DELETE FROM transactions WHERE user_id IN ({})".format(
-                    ",".join("?" for _ in user_ids)
+                con.execute(
+                    f"DELETE FROM transactions WHERE user_id IN ({','.join('?'*len(user_ids))})",
+                    list(user_ids),
                 )
-                cur.execute(q, list(user_ids))
                 con.commit()
-
-        # très important : on remet le curseur au début pour la vraie importation
         file_buf.seek(0)
 
-    # 2. Parcours du CSV par morceaux pour insertion
+    # Insertion des nouvelles lignes
     imported_months = set()
-
     for chunk in pd.read_csv(file_buf, chunksize=chunksize):
-        # Colonnes attendues
-        expected_cols = ["user_id", "date", "kind", "category", "label", "amount"]
-        for col in expected_cols:
+        for col in ["user_id", "date", "kind", "category", "label", "amount"]:
             if col not in chunk.columns:
                 chunk[col] = None
-
-        # Normalisation
         chunk["user_id"] = chunk["user_id"].astype(int, errors="ignore")
         chunk["date"] = pd.to_datetime(chunk["date"], errors="coerce").dt.date
         chunk["kind"] = chunk["kind"].astype(str).str.lower().str.strip()
         chunk["amount"] = pd.to_numeric(chunk["amount"], errors="coerce").fillna(0.0)
 
-        rows_to_insert = []
+        rows = []
         now_iso = datetime.utcnow().isoformat()
-
         for _, r in chunk.iterrows():
-            # On skippe les lignes pourries
             if (
                 pd.isna(r["date"])
                 or r["amount"] == 0.0
                 or r["kind"] not in ("revenu", "depense", "epargne")
             ):
                 continue
-
-            kind = r["kind"]
-            user_id_row = int(r["user_id"]) if pd.notna(r["user_id"]) else user_id
-
-            date_val = r["date"]  # déjà un datetime.date
-            montant_val = float(r["amount"])
-
-            categorie = (
-                r["category"]
-                if pd.notna(r["category"])
-                else ("Épargne" if kind == "epargne" else "")
-            )
-
-            libelle = (
-                r["label"]
-                if pd.notna(r["label"])
-                else ("Épargne" if kind == "epargne" else "")
-            )
-
-            trx_type = "IN" if kind == "revenu" else "OUT"
-
-            # >>>>>>>>>> CHANGEMENT ICI : on inclut created_at
-            rows_to_insert.append(
+            trx_type = "IN" if r["kind"] == "revenu" else "OUT"
+            rows.append(
                 (
-                    str(date_val),  # date (en string YYYY-MM-DD)
-                    trx_type,  # type ('IN'/'OUT')
-                    str(categorie),
-                    str(libelle),
-                    montant_val,
-                    0,  # recurrent -> 0 par défaut
-                    now_iso,  # created_at -> timestamp ISO
-                    user_id_row,  # user_id
+                    str(r["date"]),
+                    trx_type,
+                    str(r["category"] or ""),
+                    str(r["label"] or ""),
+                    float(r["amount"]),
+                    0,
+                    now_iso,
+                    int(r["user_id"]) or user_id,
                 )
             )
+        bulk_insert_transactions(rows)
 
-            # Pour marquer les mois où il y a de l'épargne (optionnel)
-            if kind == "epargne":
-                d = pd.to_datetime(date_val, errors="coerce")
-                if pd.notnull(d):
-                    imported_months.add(d.strftime("%Y-%m"))
-
-        # Insertion batch du chunk courant
-        bulk_insert_transactions(rows_to_insert)
-
-    # 3. Invalidation du cache / refresh data en mémoire
-    st.session_state["last_imported_user_id"] = user_id
-    st.session_state["_force_reload"] = True
-
-    if imported_months:
-        st.session_state["_force_epargne_resync"] = True
-        st.session_state["_force_epargne_months"] = list(imported_months)
-        st.session_state["_open_tab"] = "epargne"
-
+    # Rafraîchit la session
+    st.session_state.update(
+        {
+            "last_imported_user_id": user_id,
+            "_force_reload": True,
+        }
+    )
     return True
-
-
-#  CACHING DES DONNÉES (Revenus / Dépenses)
-
-# - cached_revenus_df : charge les revenus d’un utilisateur avec mise en cache
-# - cached_depenses_df : charge les dépenses d’un utilisateur avec mise en cache
 
 
 @st.cache_data(show_spinner=False)
 def cached_revenus_df(user_id: int):
-    """Version mise en cache des revenus de l'utilisateur."""
+    """Charge les revenus avec mise en cache."""
     return get_revenus_df(user_id)
 
 
 @st.cache_data(show_spinner=False)
 def cached_depenses_df(user_id: int):
-    """Version mise en cache des dépenses de l'utilisateur."""
+    """Charge les dépenses avec mise en cache."""
     return get_depenses_df(user_id)
 
 
@@ -315,43 +185,39 @@ def cached_depenses_df(user_id: int):
 #  CONFIGURATION INITIALE DE L'APPLICATION
 # ================================================
 
+# --- Page Streamlit ---
+st.set_page_config(page_title="KPFLO", page_icon="logo_kpflo_icon.png", layout="wide")
 
-# ---------- Config ----------
-# Paramètres de la page Streamlit (titre, icône, mise en page)
-st.set_page_config(page_title="KPFLO 🤑", page_icon="💧", layout="wide")
+# --- Base de données ---
+init_db()  # Initialise la base SQLite
 
-# Initialisation de la base SQLite
-init_db()
-
-# ---------- State ----------
-# Définition des variables globales conservées dans st.session_state
-# pour gérer la connexion utilisateur et les formulaires dynamiques
+# --- État global de l'application ---
+# Variables persistantes pour la session (connexion + formulaires)
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.current_user_id = None
 
-#  Initialiser les formulaires Revenus et Dépenses
-if "revenus_forms" not in st.session_state:
-    st.session_state.revenus_forms = []
+# Initialisation des formulaires dynamiques
+st.session_state.setdefault("revenus_forms", [])
+st.session_state.setdefault("depenses_forms", [])
 
-if "depenses_forms" not in st.session_state or st.session_state.depenses_forms is None:
-    st.session_state.depenses_forms = []
 
 # ================================================
 #  HEADER DE L’APPLICATION
 # ================================================
 
-# Header de l'application :
-# - colonne gauche : titre et sous-titre
-# - colonne droite : gestion de l'utilisateur courant (sélection du profil)
-#   et affichage avatar (photo ou initiales)
-# - garantit qu'il existe toujours un utilisateur actif dans la session
-
+# --- Mise en page du header ---
 left, right = st.columns([0.55, 0.45], vertical_alignment="center")
-with left:
-    st.title("KPFLO 🤑")
-    st.caption("Gère ton argent avec style !")
 
+with left:
+    st.image("logo_kpflo.svg", width=180)
+    st.markdown(
+        "<p style='font-size:20px; color:gray; margin-top:-10px;'>"
+        "Gère ton argent avec style !</p>",
+        unsafe_allow_html=True,
+    )
+
+# --- Gestion des utilisateurs ---
 users_df = list_users()
 if users_df.empty:
     ensure_default_user()
@@ -361,82 +227,87 @@ default_user_id = ensure_default_user()
 if st.session_state.current_user_id is None:
     st.session_state.current_user_id = default_user_id
 
+
 with right:
-    # ========= Helpers avatar (idempotents) =========
+    # ================================================
+    #  AVATARS + PROFIL UTILISATEUR (HEADER DROITE)
+    # ================================================
 
+    # --- Pillow optionnel (fallback initiales si absent) ---
     try:
-        from PIL import Image  # Assure-toi d'avoir Pillow installé
+        from PIL import Image
     except Exception:
-        Image = None  # On tombera en mode "initiales" si Pillow n'est pas dispo
+        Image = None
 
+    # --- Répertoire avatars ---
     AVATAR_DIR = Path("data/avatars")
     AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 
+    # --- Helpers locaux (liés au rendu header) ---
     def _avatar_path(user_id: int) -> Path:
+        """Chemin fichier avatar pour un user."""
         return AVATAR_DIR / f"{int(user_id)}.png"
 
     def save_avatar(user_id: int, uploaded_file) -> None:
-        """Enregistre un avatar carré PNG depuis un upload Streamlit."""
+        """Enregistre un avatar carré PNG (crop + resize)."""
         if uploaded_file is None or Image is None:
             return
         img = Image.open(uploaded_file).convert("RGB")
         s = min(img.width, img.height)
-        left = (img.width - s) // 2
-        top = (img.height - s) // 2
-        img_sq = img.crop((left, top, left + s, top + s)).resize((256, 256))
+        img_sq = img.crop(
+            (
+                (img.width - s) // 2,
+                (img.height - s) // 2,
+                (img.width + s) // 2,
+                (img.height + s) // 2,
+            )
+        ).resize((256, 256))
         img_sq.save(_avatar_path(user_id), "PNG", optimize=True)
 
     def avatar_src(user_id: int) -> str | None:
+        """Retourne le chemin de l’avatar s’il existe."""
         p = _avatar_path(user_id)
         return str(p) if p.exists() else None
 
-    # ========= Un peu de style pour les avatars =========
+    # --- Style avatars ---
     st.markdown(
         """
-    <style>
-    .kpflo-avatar   { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
-    .kpflo-avatarLG { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
-    .kpflo-initial  { width: 40px; height: 40px; border-radius: 50%; background:#eee;
-                      display:flex; align-items:center; justify-content:center; font-weight:600; }
-    .kpflo-initialLG{ width: 64px; height: 64px; border-radius: 50%; background:#eee;
-                      display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.1rem; }
-    .kpflo-row { display:flex; align-items:center; gap:.6rem; }
-    </style>
-    """,
+        <style>
+        .kpflo-avatar   { width:40px;height:40px;border-radius:50%;object-fit:cover; }
+        .kpflo-avatarLG { width:64px;height:64px;border-radius:50%;object-fit:cover; }
+        .kpflo-initial  { width:40px;height:40px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;font-weight:600; }
+        .kpflo-initialLG{ width:64px;height:64px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.1rem; }
+        .kpflo-row { display:flex;align-items:center;gap:.6rem; }
+        </style>
+        """,
         unsafe_allow_html=True,
     )
 
-    # Zone utilisateur (header droite) :
-    # - récupère l'utilisateur courant depuis la session
-    # - affiche l'avatar ou les initiales
-    # - popover ▼ : voir le profil actif, basculer vers un autre profil
-    # - popover 🔑 : se connecter ou créer un nouvel utilisateur + uploader une photo
-
-    # ========= Récup utilisateur courant =========
+    # --- Profil courant ---
     cur_row = users_df[users_df["id"] == st.session_state.current_user_id].iloc[0]
     cur_fullname = (
-        f'{cur_row.get("prenom","")} {cur_row["nom"]}'.strip() or f'ID {cur_row["id"]}'
-    )
+        f'{cur_row.get("prenom","")} {cur_row["nom"]}'
+    ).strip() or f'ID {cur_row["id"]}'
     cur_avatar = avatar_src(int(cur_row["id"]))
 
-    # ========= Bandeau avatar (remplace "✏️ Modifier utilisateur") =========
-    # On affiche l'avatar (ou initiales) + un popover "▼" qui contient le switch
+    # --- Bandeau avatar + popover switch ---
     cols_hdr = st.columns([0.2, 0.15, 0.65], vertical_alignment="center")
     with cols_hdr[0]:
         if cur_avatar:
-            st.image(cur_avatar, caption=None, width=40)
+            st.image(cur_avatar, width=40)
         else:
             st.markdown(
                 f"<div class='kpflo-initial'>{(cur_fullname[:1] or '🙂')}</div>",
                 unsafe_allow_html=True,
             )
+
     with cols_hdr[1]:
         with st.popover("▼"):
             st.markdown("**Profil courant**")
             c1, c2 = st.columns([0.3, 0.7], vertical_alignment="center")
             with c1:
                 if cur_avatar:
-                    st.image(cur_avatar, caption=None, width=64)
+                    st.image(cur_avatar, width=64)
                 else:
                     st.markdown(
                         f"<div class='kpflo-initialLG'>{(cur_fullname[:1] or '🙂')}</div>",
@@ -454,13 +325,13 @@ with right:
                 rid = int(row["id"])
                 if rid == int(cur_row["id"]):
                     continue
-                name = f'{row.get("prenom","")} {row["nom"]}'.strip() or f"ID {rid}"
+                name = (f'{row.get("prenom","")} {row["nom"]}').strip() or f"ID {rid}"
                 ava = avatar_src(rid)
 
                 r1, r2, r3 = st.columns([0.25, 0.55, 0.20], vertical_alignment="center")
                 with r1:
                     if ava:
-                        st.image(ava, caption=None, width=40)
+                        st.image(ava, width=40)
                     else:
                         st.markdown(
                             f"<div class='kpflo-initial'>{(name[:1] or '🙂')}</div>",
@@ -475,7 +346,7 @@ with right:
 
             st.caption("Crée plusieurs profils (vert/rouge/limite) puis bascule ici.")
 
-    # ========= Popover "🔑 Se connecter / Créer" (conservé) + Upload photo =========
+    # --- Popover authentification + création + upload avatar ---
     with st.popover("🔑 Se connecter / Créer"):
         if st.session_state.logged_in:
             if st.button("Déconnexion"):
@@ -511,11 +382,8 @@ with right:
                 "Confirmer mot de passe", type="password", key="new_pw_confirm"
             )
 
-            # 👉 Nouveau : photo de profil (optionnel)
             new_avatar = st.file_uploader(
-                "Photo de profil (PNG/JPG, optionnel)",
-                type=["png", "jpg", "jpeg"],
-                accept_multiple_files=False,
+                "Photo de profil (PNG/JPG, optionnel)", type=["png", "jpg", "jpeg"]
             )
 
             if st.button("Créer"):
@@ -539,48 +407,37 @@ with right:
 # ================================================
 #  CHARGEMENT DES DONNÉES UTILISATEUR
 # ================================================
-# Cette partie charge les transactions de l’utilisateur courant
-# à partir de la base SQLite, grâce à la fonction load_user_df().
-# Les données sont ensuite stockées dans st.session_state.df
-# pour être utilisées dans tout le tableau de bord.
+# Charge le DataFrame de l'utilisateur courant et le stocke en session.
 
+st.session_state.df = load_user_df(st.session_state.current_user_id)
 
-if "df" not in st.session_state:
-    st.session_state.df = load_user_df(st.session_state.current_user_id)
-else:
-    st.session_state.df = load_user_df(st.session_state.current_user_id)
-
-# ---------- Sidebar : Import / Export CSV ----------
-# Permet de :
-# - télécharger toutes les transactions au format CSV (ou un modèle vide)
-# - réimporter un CSV pour alimenter la base SQLite
-# - éviter les doublons d'import et afficher un message de succès/erreur
-
+# ================================================
+#  SIDEBAR : IMPORT / EXPORT CSV
+# ================================================
 
 st.sidebar.subheader("📦 Données (CSV) – Base SQLite")
 
-
-# -- Download (export ou modèle 36 mois)
+# Export (ou modèle 36 mois si DB vide)
 csv_bytes = build_export_or_template_csv_sqlite(months=36)
 st.sidebar.download_button(
     label="⬇️ Télécharger CSV",
     data=csv_bytes,
     file_name="kpflo_finances.csv",
     mime="text/csv",
-    help="Modèle (ou export DB) pour tous les utilisateurs.",
+    help="Modèle ou export complet (tous utilisateurs).",
 )
 
-# -- Import (FORMULAIRE + garde anti-répétition)
 st.sidebar.markdown("—")
 st.sidebar.markdown("**📥 Importer un CSV**")
 
+# Formulaire d'import (anti double-import via hash)
 with st.sidebar.form("csv_import_form", clear_on_submit=False):
     replace_all = st.checkbox(
         "Remplacer toutes les transactions des utilisateurs présents dans le CSV",
         value=False,
     )
     uploaded = st.file_uploader(
-        "CSV unifié (user_id,date,kind,category,label,amount)",
+        "CSV (user_id,date,kind,category,label,amount)",
         type=["csv"],
         key="csv_upload",
     )
@@ -592,10 +449,8 @@ if submitted:
     else:
         content = uploaded.getvalue()
         file_hash = hashlib.md5(content).hexdigest()
-        last_hash = st.session_state.get("last_import_hash")
-
-        if last_hash == file_hash:
-            st.sidebar.info("Ce fichier a déjà été importé (aucune action).")
+        if st.session_state.get("last_import_hash") == file_hash:
+            st.sidebar.info("Ce fichier a déjà été importé.")
         else:
             ok = import_unified_csv_to_sqlite(
                 uploaded,
@@ -605,19 +460,16 @@ if submitted:
             if ok:
                 st.session_state["last_import_hash"] = file_hash
                 st.sidebar.success("Import réussi ✅")
-
                 st.rerun()
             else:
-                st.sidebar.error("Import échoué. Vérifie le format des colonnes.")
+                st.sidebar.error("Import échoué. Vérifie les colonnes.")
 
 
 # ================================================
 #  INTERFACE PRINCIPALE : ONGLET REVENUS / DÉPENSES / BUDGET
 # ================================================
-# On crée ici trois onglets principaux avec Streamlit :
-# - 📈 Revenus : pour visualiser et modifier les entrées d’argent
-# - 📉 Dépenses : pour suivre les sorties
-# - 📊 Budget : pour analyser le solde et les prévisions
+# Crée les trois onglets principaux du tableau de bord.
+
 tab_revenus, tab_depenses, tab_budget = st.tabs(
     ["📈 Revenus", "📉 Dépenses", "📊 Budget"]
 )
@@ -626,79 +478,54 @@ tab_revenus, tab_depenses, tab_budget = st.tabs(
 # ================================================
 #  SECTION : REVENUS  (Interface et style)
 # ================================================
-# Cette partie ouvre l’onglet "Revenus" :
 with tab_revenus:
     st.subheader("Ajoute tes revenus")
 
-    # --- CSS local de la section ---
+    # --- Style local de la section ---
     st.markdown(
         """
-    <style>
-      :root { --primary-color: #f97316; } /* orange pour les boutons primary */
-
-      /* HEADER wrapper */
-      #revenus-header { margin-bottom: 12px; }
-
-      /* Styliser UNIQUEMENT le select du header (petit rectangle) */
-      #revenus-header div[data-baseweb="select"]{
-        width: 220px !important;
-        border: 2px solid #d1d5db !important;
-        border-radius: 6px !important;
-        background-color: #ffffff !important;
-        transition: all 0.2s ease-in-out;
-      }
-      #revenus-header div[data-baseweb="select"]:hover{
-        border-color: #f97316 !important;
-        box-shadow: 0 0 5px rgba(249,115,22,0.3) !important;
-      }
-      #revenus-header div[data-baseweb="select"] > div{
-        font-size: 0.95rem !important;
-        color: #333 !important;
-        font-weight: 500 !important;
-      }
-
-      /* Mini-carte récap total à droite */
-      .revenus-mini-wrap { display: flex; justify-content: flex-end; }
-      .revenus-mini {
-        display: inline-flex; align-items: baseline; gap: 12px;
-        padding: 10px 14px;
-        border: 2px solid #d1d5db;
-        border-radius: 10px;
-        background: #fff;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-      }
-      .revenus-mini .mini-title { font-weight: 600; color: #374151; }
-      .revenus-mini .mini-total { font-variant-numeric: tabular-nums; font-weight: 700; color: #111827; }
-      .revenus-mini .mini-euro { opacity: .85; }
-      .revenus-mini .mini-badge { margin-left: 6px; font-size: 12px; padding: 2px 6px; border-radius: 999px; background: #f3f4f6; color: #6b7280; }
-
-      hr { border-top: 1px solid #e0e0e0 !important; margin: 4px 0 !important; }
-    </style>
-    """,
+        <style>
+          :root { --primary-color: #f97316; }
+          #revenus-header { margin-bottom: 12px; }
+          #revenus-header div[data-baseweb="select"]{
+            width:220px;border:2px solid #d1d5db;border-radius:6px;background:#fff;transition:.2s;
+          }
+          #revenus-header div[data-baseweb="select"]:hover{
+            border-color:#f97316;box-shadow:0 0 5px rgba(249,115,22,.3);
+          }
+          #revenus-header div[data-baseweb="select"] > div{
+            font-size:.95rem;color:#333;font-weight:500;
+          }
+          .revenus-mini-wrap { display:flex;justify-content:flex-end; }
+          .revenus-mini {
+            display:inline-flex;align-items:baseline;gap:12px;padding:10px 14px;
+            border:2px solid #d1d5db;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.04);
+          }
+          .revenus-mini .mini-title{font-weight:600;color:#374151;}
+          .revenus-mini .mini-total{font-variant-numeric:tabular-nums;font-weight:700;color:#111827;}
+          .revenus-mini .mini-euro{opacity:.85;}
+          .revenus-mini .mini-badge{margin-left:6px;font-size:12px;padding:2px 6px;border-radius:999px;background:#f3f4f6;color:#6b7280;}
+          hr { border-top:1px solid #e0e0e0 !important;margin:4px 0 !important; }
+        </style>
+        """,
         unsafe_allow_html=True,
     )
 
-    #  HEADER REVENUS : Sélecteur + Total prévisionnel
-
-    # Cette section crée l’en-tête de la page Revenus :
-    # - À gauche : un menu déroulant pour choisir le mode d’affichage (par mois ou par année).
-    # - À droite : un mini-récapitulatif qui affiche la somme totale des revenus.
-
+    # --- Header : sélecteur groupe + total preview ---
     st.markdown('<div id="revenus-header">', unsafe_allow_html=True)
     header_left, header_right = st.columns([1, 5], vertical_alignment="center")
 
     with header_left:
         group_mode = st.selectbox(
             "🗓️ Grouper par",
-            ["Mois", "Année"],  # Semaine retiré
+            ["Mois", "Année"],
             key="revenus_group_mode",
             index=0,
             label_visibility="visible",
         )
 
-    st.session_state.df = load_user_df(
-        st.session_state.current_user_id
-    )  # recharge les data avant le calcul du total
+    # Recharge pour un total à jour (inclut les lignes en édition)
+    st.session_state.df = load_user_df(st.session_state.current_user_id)
     total_preview = get_revenus_preview_summary(
         st.session_state.current_user_id, st.session_state.revenus_forms
     )
@@ -706,30 +533,28 @@ with tab_revenus:
     with header_right:
         st.markdown(
             f"""
-        <div class="revenus-mini-wrap">
-          <div class="revenus-mini" title="Somme des revenus affichés (prévisualisation)">
-            <span class="mini-title">Revenus enregistrés</span>
-            <span class="mini-total">{total_preview:.2f}</span>
-            <span class="mini-euro">€</span>
-            <span class="mini-badge">Total</span>
-          </div>
-        </div>
-        """,
+            <div class="revenus-mini-wrap">
+              <div class="revenus-mini" title="Somme des revenus affichés (prévisualisation)">
+                <span class="mini-title">Revenus enregistrés</span>
+                <span class="mini-total">{total_preview:.2f}</span>
+                <span class="mini-euro">€</span>
+                <span class="mini-badge">Total</span>
+              </div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)  # /revenus-header
-
-    #  DONNÉES REVENUS + HELPERS LOCAUX
-
+    # --- Données Revenus ---
     df_revenus_all = cached_revenus_df(st.session_state.current_user_id)
 
-    # ---------- Mode "Mois" : un seul niveau (mois -> lignes) ----------
+    # -------- Mode "Mois" : mois -> lignes --------
     if group_mode == "Mois" and not df_revenus_all.empty:
         df = df_revenus_all.copy()
         dt = pd.to_datetime(df["date"])
         df["month_key"] = dt.dt.strftime("%Y-%m")
-        df["month_name"] = dt.dt.strftime("%B %Y")  # ex. "October 2025"
+        df["month_name"] = dt.dt.strftime("%B %Y")
 
         grouped = (
             df.groupby("month_key")
@@ -743,28 +568,18 @@ with tab_revenus:
         )
 
         for _, g in grouped.iterrows():
-            m_key = g["month_key"]
-            m_name = g["month_name"]
-            m_total = float(g["total_montant"])
-            m_count = int(g["count"])
-
-            # Titre fixe de l’expander
+            m_key, m_name = g["month_key"], g["month_name"]
+            m_total, m_count = float(g["total_montant"]), int(g["count"])
             display_name = f"Revenus_{m_name}"
 
-            with st.expander(
-                f"{display_name} ({m_total:.2f} €) - {m_count} lignes", expanded=False
-            ):
-                # Lignes du mois (optimisées avec st.dataframe)
+            with st.expander(f"{display_name} ({m_total:.2f} €) - {m_count} lignes"):
                 m_df = (
                     df[df["month_key"] == m_key]
                     .sort_values("date", ascending=False)
-                    .copy()
+                    .reset_index(drop=True)
                 )
-                # Ajouter une colonne row_num pour un index utilisateur (1, 2, 3, ...)
-                m_df = m_df.reset_index(drop=True)
                 m_df["row_num"] = m_df.index + 1
 
-                # Préparer un affichage propre
                 display_df = m_df[
                     ["row_num", "date", "categorie", "libelle", "montant"]
                 ].copy()
@@ -780,20 +595,16 @@ with tab_revenus:
                 ]
 
                 st.dataframe(
-                    display_df,
-                    hide_index=True,
-                    use_container_width=True,
-                    height=300,  # Hauteur fixe pour activer la pagination native
+                    display_df, hide_index=True, use_container_width=True, height=300
                 )
 
-                # Panneau pour gérer une ligne existante
+                # Actions ligne existante
                 st.markdown("#### Gérer une ligne existante")
                 selected_rownum = st.text_input(
                     "Numéro de ligne à modifier / supprimer",
                     key=f"rev_manage_row_{m_key}",
                     placeholder="ex: 1",
                 )
-
                 action_col1, action_col2 = st.columns(2)
 
                 with action_col1:
@@ -804,7 +615,6 @@ with tab_revenus:
                         disabled=(selected_rownum.strip() == ""),
                     ):
                         try:
-                            # Convertir row_num en ID interne
                             rownum_int = int(selected_rownum)
                             row_match = m_df[m_df["row_num"] == rownum_int]
                             if row_match.empty:
@@ -812,19 +622,14 @@ with tab_revenus:
                             else:
                                 real_id = int(row_match.iloc[0]["id"])
                                 delete_revenu(real_id, st.session_state.current_user_id)
-
-                                # Invalider les caches
                                 cached_revenus_df.clear()
                                 cached_depenses_df.clear()
                                 load_user_df.clear()
-
                                 st.session_state.df = load_user_df(
                                     st.session_state.current_user_id
                                 )
-
                                 st.success(f"Ligne {rownum_int} supprimée.")
                                 st.rerun()
-
                         except Exception as e:
                             st.error(f"Erreur suppression : {e}")
 
@@ -835,14 +640,12 @@ with tab_revenus:
                         disabled=(selected_rownum.strip() == ""),
                     ):
                         try:
-                            # Convertir row_num en ID interne
                             rownum_int = int(selected_rownum)
                             row_match = m_df[m_df["row_num"] == rownum_int]
                             if row_match.empty:
                                 st.warning("Numéro de ligne invalide.")
                             else:
                                 r = row_match.iloc[0]
-                                # Ajouter la ligne au formulaire de saisie
                                 st.session_state.revenus_forms.append(
                                     {
                                         "id": int(r["id"]),
@@ -856,15 +659,12 @@ with tab_revenus:
                                     f"Ligne {rownum_int} chargée en bas pour édition."
                                 )
                                 st.rerun()
-
                         except Exception as e:
                             st.error(f"Erreur chargement : {e}")
 
-                st.caption(
-                    "⚠️ Pour modifier ou supprimer une ligne, entrez son numéro de ligne ci-dessus."
-                )
+                st.caption("⚠️ Entrez le numéro de ligne pour modifier ou supprimer.")
 
-    # ---------- Mode "Année" : deux niveaux (année -> mois -> lignes) ----------
+    # -------- Mode "Année" : année -> mois -> lignes --------
     if group_mode == "Année" and not df_revenus_all.empty:
         df = df_revenus_all.copy()
         dt = pd.to_datetime(df["date"])
@@ -872,7 +672,6 @@ with tab_revenus:
         df["month_key"] = dt.dt.strftime("%Y-%m")
         df["month_name"] = dt.dt.strftime("%B %Y")
 
-        # Groupes Année
         year_groups = (
             df.groupby("year")
             .agg(total_montant=("montant", "sum"))
@@ -881,12 +680,10 @@ with tab_revenus:
         )
 
         for _, yg in year_groups.iterrows():
-            y = int(yg["year"])
-            y_total = float(yg["total_montant"])
-
+            y, y_total = int(yg["year"]), float(yg["total_montant"])
             year_display_name = f"Revenus_{y}"
 
-            with st.expander(f"{year_display_name} ({y_total:.2f} €)", expanded=False):
+            with st.expander(f"{year_display_name} ({y_total:.2f} €)"):
                 y_df = df[df["year"] == y]
                 month_groups = (
                     y_df.groupby("month_key")
@@ -900,29 +697,20 @@ with tab_revenus:
                 )
 
                 for _, mg in month_groups.iterrows():
-                    m_key = mg["month_key"]
-                    m_name = mg["month_name"]
-                    m_total = float(mg["total_montant"])
-                    m_count = int(mg["count"])
-
-                    # Titre fixe de l’expander
+                    m_key, m_name = mg["month_key"], mg["month_name"]
+                    m_total, m_count = float(mg["total_montant"]), int(mg["count"])
                     display_name = f"Revenus_{m_name}"
 
                     with st.expander(
-                        f"{display_name} ({m_total:.2f} €) - {m_count} lignes",
-                        expanded=False,
+                        f"{display_name} ({m_total:.2f} €) - {m_count} lignes"
                     ):
-                        # Lignes du mois (optimisées avec st.dataframe)
                         m_df = (
                             y_df[y_df["month_key"] == m_key]
                             .sort_values("date", ascending=False)
-                            .copy()
+                            .reset_index(drop=True)
                         )
-                        # Ajouter une colonne row_num pour un index utilisateur (1, 2, 3, ...)
-                        m_df = m_df.reset_index(drop=True)
                         m_df["row_num"] = m_df.index + 1
 
-                        # Préparer un affichage propre
                         display_df = m_df[
                             ["row_num", "date", "categorie", "libelle", "montant"]
                         ].copy()
@@ -941,17 +729,15 @@ with tab_revenus:
                             display_df,
                             hide_index=True,
                             use_container_width=True,
-                            height=300,  # Hauteur fixe pour activer la pagination native
+                            height=300,
                         )
 
-                        # Panneau pour gérer une ligne existante
                         st.markdown("#### Gérer une ligne existante")
                         selected_rownum = st.text_input(
                             "Numéro de ligne à modifier / supprimer",
                             key=f"rev_manage_row_{y}_{m_key}",
                             placeholder="ex: 1",
                         )
-
                         action_col1, action_col2 = st.columns(2)
 
                         with action_col1:
@@ -962,7 +748,6 @@ with tab_revenus:
                                 disabled=(selected_rownum.strip() == ""),
                             ):
                                 try:
-                                    # Convertir row_num en ID interne
                                     rownum_int = int(selected_rownum)
                                     row_match = m_df[m_df["row_num"] == rownum_int]
                                     if row_match.empty:
@@ -972,19 +757,14 @@ with tab_revenus:
                                         delete_revenu(
                                             real_id, st.session_state.current_user_id
                                         )
-
-                                        # Invalider les caches
                                         cached_revenus_df.clear()
                                         cached_depenses_df.clear()
                                         load_user_df.clear()
-
                                         st.session_state.df = load_user_df(
                                             st.session_state.current_user_id
                                         )
-
                                         st.success(f"Ligne {rownum_int} supprimée.")
                                         st.rerun()
-
                                 except Exception as e:
                                     st.error(f"Erreur suppression : {e}")
 
@@ -995,14 +775,12 @@ with tab_revenus:
                                 disabled=(selected_rownum.strip() == ""),
                             ):
                                 try:
-                                    # Convertir row_num en ID interne
                                     rownum_int = int(selected_rownum)
                                     row_match = m_df[m_df["row_num"] == rownum_int]
                                     if row_match.empty:
                                         st.warning("Numéro de ligne invalide.")
                                     else:
                                         r = row_match.iloc[0]
-                                        # Ajouter la ligne au formulaire de saisie
                                         st.session_state.revenus_forms.append(
                                             {
                                                 "id": int(r["id"]),
@@ -1016,15 +794,14 @@ with tab_revenus:
                                             f"Ligne {rownum_int} chargée en bas pour édition."
                                         )
                                         st.rerun()
-
                                 except Exception as e:
                                     st.error(f"Erreur chargement : {e}")
 
                         st.caption(
-                            "⚠️ Pour modifier ou supprimer une ligne, entrez son numéro de ligne ci-dessus."
+                            "⚠️ Entrez le numéro de ligne pour modifier ou supprimer."
                         )
 
-    # ---------- Saisie dynamique des nouvelles lignes ----------
+    # -------- Saisie dynamique (nouvelles lignes / édition) --------
     edited_rows = []
     if st.session_state.revenus_forms:
         st.markdown("### Saisie en cours (nouvelle série ou édition)")
@@ -1035,57 +812,42 @@ with tab_revenus:
         header_cols[3].markdown("**Montant (€)**")
 
     for i, form in enumerate(st.session_state.revenus_forms):
-        key_date = f"rev_date_{i}"
-        key_cat = f"rev_cat_{i}"
-        key_lib_choice = f"rev_lib_choice_{i}"
-        key_lib_value = f"rev_lib_value_{i}"  # valeur réelle envoyée en DB
+        key_date, key_cat = f"rev_date_{i}", f"rev_cat_{i}"
+        key_lib_choice, key_lib_value = f"rev_lib_choice_{i}", f"rev_lib_value_{i}"
         key_montant = f"rev_montant_{i}"
 
-        # Calculer les valeurs initiales
-        initial_date = form.get("date", date.today())
-        initial_cat = form.get("categorie", INCOME_CATEGORIES[0])
-        initial_montant = form.get("montant", 0.0)
-        if initial_cat in INCOME_CATEGORIES:
-            initial_cat_index = INCOME_CATEGORIES.index(initial_cat)
-        else:
-            initial_cat_index = 0
+        init_date = form.get("date", date.today())
+        init_cat = form.get("categorie", INCOME_CATEGORIES[0])
+        init_amt = form.get("montant", 0.0)
+        init_cat_idx = (
+            INCOME_CATEGORIES.index(init_cat) if init_cat in INCOME_CATEGORIES else 0
+        )
 
-        init_opts = income_suggestions_for_category(initial_cat, initial_date)
-        initial_lib = form.get("libelle")
-        if not initial_lib or initial_lib not in init_opts:
-            initial_lib = init_opts[0] if init_opts else "Revenu"
-        if initial_lib in init_opts:
-            initial_lib_index = init_opts.index(initial_lib)
-        else:
-            initial_lib_index = 0
+        init_opts = income_suggestions_for_category(init_cat, init_date)
+        init_lib = form.get("libelle") or (init_opts[0] if init_opts else "Revenu")
+        init_lib_idx = init_opts.index(init_lib) if init_lib in init_opts else 0
 
-        # Colonnes de saisie
         cols = st.columns([1, 2, 2.6, 1, 0.6])
 
-        # Date
         with cols[0]:
             st.date_input(
                 "",
-                value=initial_date,
+                value=init_date,
                 key=key_date,
                 on_change=rev_update_form,
                 args=(i, key_date, key_cat, key_lib_choice, key_lib_value, key_montant),
                 label_visibility="hidden",
             )
-
-        # Catégorie
         with cols[1]:
             st.selectbox(
                 "",
                 options=INCOME_CATEGORIES,
-                index=initial_cat_index,
+                index=init_cat_idx,
                 key=key_cat,
                 on_change=rev_update_form,
                 args=(i, key_date, key_cat, key_lib_choice, key_lib_value, key_montant),
                 label_visibility="hidden",
             )
-
-        # Libellé (sélecteur non-éditable, suffixé mois)
         with cols[2]:
             opts = income_suggestions_for_category(
                 st.session_state[key_cat], st.session_state[key_date]
@@ -1093,37 +855,32 @@ with tab_revenus:
             st.selectbox(
                 "",
                 options=opts,
-                index=initial_lib_index,
+                index=init_lib_idx,
                 key=key_lib_choice,
                 on_change=rev_update_form,
                 args=(i, key_date, key_cat, key_lib_choice, key_lib_value, key_montant),
                 label_visibility="hidden",
             )
-            # Sync lib_value avec choice après création
             st.session_state[key_lib_value] = st.session_state.get(
-                key_lib_choice, initial_lib
+                key_lib_choice, init_lib
             )
-
-        # Montant
         with cols[3]:
             st.number_input(
                 "",
                 min_value=0.0,
                 step=10.0,
-                value=float(initial_montant),
+                value=float(init_amt),
                 key=key_montant,
                 on_change=rev_update_form,
                 args=(i, key_date, key_cat, key_lib_choice, key_lib_value, key_montant),
                 label_visibility="hidden",
             )
-
-        # Supprimer la ligne
         with cols[4]:
             if st.button(
                 "❌",
                 key=f"del_form_{i}",
                 type="secondary",
-                help="Supprimer cette ligne du formulaire",
+                help="Supprimer cette ligne",
             ):
                 new_forms = st.session_state.revenus_forms.copy()
                 new_forms.pop(i)
@@ -1135,12 +892,12 @@ with tab_revenus:
                 "id": form.get("id"),
                 "date": st.session_state[key_date],
                 "categorie": st.session_state[key_cat],
-                "libelle": st.session_state[key_lib_value],  # valeur réelle
+                "libelle": st.session_state[key_lib_value],
                 "montant": st.session_state[key_montant],
             }
         )
 
-    # ---------- Boutons bas de section ----------
+    # --- Actions bas de section ---
     btn_left, btn_right = st.columns([3, 1])
 
     with btn_left:
@@ -1153,7 +910,6 @@ with tab_revenus:
         if st.session_state.get("add_revenu"):
             new_forms = st.session_state.revenus_forms.copy()
             today = date.today()
-            # ligne par défaut via core (non suffixée) + suffixe ici pour cohérence UI
             base = default_revenu_row(INCOME_CATEGORIES, today)
             mois = _month_human(today)
             base["libelle"] = f"{base['libelle']}_{mois}" if mois else base["libelle"]
@@ -1179,37 +935,25 @@ with tab_revenus:
                             recurrent=False,
                             user_id=st.session_state.current_user_id,
                         )
-
-                # on efface les formulaires temporaires
-                st.session_state.revenus_forms = []
-
-                # on invalide les caches
+                st.session_state.revenus_forms = []  # reset formulaire
                 cached_revenus_df.clear()
-                cached_depenses_df.clear()  # car les revenus impactent les ratios dans Dépenses
+                cached_depenses_df.clear()
                 load_user_df.clear()
-
-                # on recharge les données propres
                 st.session_state.df = load_user_df(st.session_state.current_user_id)
                 st.balloons()
                 st.success("Revenus enregistrés !")
-
             except Exception as e:
                 st.error(f"Erreur : {e}")
             st.rerun()
 
 
 # =======================
-# SECTION : DÉPENSES 🧾 (Année -> Mois -> Lignes)
-# - Libellé via depenses.py + suffixe mois
-# - "Autre" = entrée non-éditable (suffixée du mois)
-# - Ratio sur revenu NET (revenus - Impôts & taxes) avec cibles/caps 50/30/20
-# - Affichage court : "Seuil X%" (détail cible/cap en tooltip)
+# SECTION : DÉPENSES 🧾
 # =======================
-
 with tab_depenses:
     st.subheader("Ajoute tes dépenses")
 
-    # ---------- CSS local ----------
+    # --- CSS local (style des contrôles, mini-carte, boîtes de ratio) ---
     st.markdown(
         """
     <style>
@@ -1245,7 +989,7 @@ with tab_depenses:
         unsafe_allow_html=True,
     )
 
-    # ---------- Header : sélecteur + mini-total ----------
+    # --- Header (sélecteur + mini-total) ---
     st.markdown('<div id="depenses-header">', unsafe_allow_html=True)
     header_left, header_right = st.columns([1, 5], vertical_alignment="center")
 
@@ -1278,7 +1022,7 @@ with tab_depenses:
 
     revenus_df_all = cached_revenus_df(st.session_state.current_user_id)
 
-    # ---------- Groupes (Mois / Année -> Mois -> Lignes) ----------
+    # --- Vue Mois : ratios par catégorie + lignes du mois + actions ---
     if dep_group_mode == "Mois" and not df_depenses_all.empty:
         df = df_depenses_all.copy()
         dt = pd.to_datetime(df["date"])
@@ -1299,14 +1043,12 @@ with tab_depenses:
         for _, g in grouped.iterrows():
             m_key, m_name = g["month_key"], g["month_name"]
             m_total, m_count = float(g["total_montant"]), int(g["count"])
-
-            # Titre fixe de l’expander
             display_name = f"Dépenses_{m_name}"
 
             with st.expander(
                 f"{display_name} ({m_total:.2f} €) - {m_count} lignes", expanded=False
             ):
-                # Calcul du ratio global pour le mois
+                # Ratios par catégorie (base: revenu NET du mois)
                 m_df = df[df["month_key"] == m_key]
                 for cat in m_df["categorie"].unique():
                     cat_total = float(m_df[m_df["categorie"] == cat]["montant"].sum())
@@ -1319,17 +1061,14 @@ with tab_depenses:
                         df_depenses_all,
                     )
 
-                # Lignes du mois (optimisées avec st.dataframe)
+                # Tableau des lignes
                 m_df = (
                     df[df["month_key"] == m_key]
                     .sort_values("date", ascending=False)
                     .copy()
-                )
-                # Ajouter une colonne row_num pour un index utilisateur (1, 2, 3, ...)
-                m_df = m_df.reset_index(drop=True)
+                ).reset_index(drop=True)
                 m_df["row_num"] = m_df.index + 1
 
-                # Préparer un affichage propre
                 display_df = m_df[
                     ["row_num", "date", "categorie", "libelle", "montant"]
                 ].copy()
@@ -1345,20 +1084,16 @@ with tab_depenses:
                 ]
 
                 st.dataframe(
-                    display_df,
-                    hide_index=True,
-                    use_container_width=True,
-                    height=300,
+                    display_df, hide_index=True, use_container_width=True, height=300
                 )
 
-                # Panneau pour gérer une ligne existante
+                # Actions sur ligne existante (delete / charger pour édition)
                 st.markdown("#### Gérer une ligne existante")
                 selected_rownum = st.text_input(
                     "Numéro de ligne à modifier / supprimer",
                     key=f"dep_manage_row_{m_key}",
                     placeholder="ex: 1",
                 )
-
                 c1, c2 = st.columns(2)
 
                 with c1:
@@ -1378,19 +1113,14 @@ with tab_depenses:
                                 delete_depense(
                                     real_id, st.session_state.current_user_id
                                 )
-
-                                # Invalider les caches
                                 cached_revenus_df.clear()
                                 cached_depenses_df.clear()
                                 load_user_df.clear()
-
                                 st.session_state.df = load_user_df(
                                     st.session_state.current_user_id
                                 )
-
                                 st.success(f"Ligne {rownum_int} supprimée.")
                                 st.rerun()
-
                         except Exception as e:
                             st.error(f"Erreur suppression : {e}")
 
@@ -1407,7 +1137,6 @@ with tab_depenses:
                                 st.warning("Numéro de ligne invalide.")
                             else:
                                 r = row_match.iloc[0]
-                                # Pousser la ligne dans le formulaire dynamique
                                 st.session_state.depenses_forms.append(
                                     {
                                         "id": int(r["id"]),
@@ -1421,14 +1150,14 @@ with tab_depenses:
                                     f"Ligne {rownum_int} chargée en bas pour édition."
                                 )
                                 st.rerun()
-
                         except Exception as e:
                             st.error(f"Erreur chargement : {e}")
 
                 st.caption(
-                    "Vous pouvez modifier ou supprimer une ligne en indiquant son numéro de ligne ci-dessus."
+                    "Vous pouvez modifier ou supprimer une ligne en indiquant son numéro."
                 )
 
+    # --- Vue Année : année -> mois -> lignes + actions ---
     if dep_group_mode == "Année" and not df_depenses_all.empty:
         df = df_depenses_all.copy()
         dt = pd.to_datetime(df["date"])
@@ -1446,6 +1175,7 @@ with tab_depenses:
         for _, yg in year_groups.iterrows():
             y, y_total = int(yg["year"]), float(yg["total_montant"])
             year_display_name = f"Dépenses_{y}"
+
             with st.expander(f"{year_display_name} ({y_total:.2f} €)", expanded=False):
                 y_df = df[df["year"] == y].sort_values("date", ascending=False)
                 month_groups = (
@@ -1458,18 +1188,17 @@ with tab_depenses:
                     .reset_index()
                     .sort_values("month_key", ascending=False)
                 )
+
                 for _, mg in month_groups.iterrows():
                     m_key, m_name = mg["month_key"], mg["month_name"]
                     m_total, m_count = float(mg["total_montant"]), int(mg["count"])
-
-                    # Titre fixe de l’expander
                     display_name = f"Dépenses_{m_name}"
 
                     with st.expander(
                         f"{display_name} ({m_total:.2f} €) - {m_count} lignes",
                         expanded=False,
                     ):
-                        # Calcul du ratio global pour le mois
+                        # Ratios par catégorie
                         m_df = y_df[y_df["month_key"] == m_key]
                         for cat in m_df["categorie"].unique():
                             cat_total = float(
@@ -1484,17 +1213,14 @@ with tab_depenses:
                                 df_depenses_all,
                             )
 
-                        # Lignes du mois (optimisées avec st.dataframe)
+                        # Tableau des lignes
                         m_df = (
                             y_df[y_df["month_key"] == m_key]
                             .sort_values("date", ascending=False)
                             .copy()
-                        )
-                        # Ajouter une colonne row_num pour un index utilisateur (1, 2, 3, ...)
-                        m_df = m_df.reset_index(drop=True)
+                        ).reset_index(drop=True)
                         m_df["row_num"] = m_df.index + 1
 
-                        # Préparer un affichage propre
                         display_df = m_df[
                             ["row_num", "date", "categorie", "libelle", "montant"]
                         ].copy()
@@ -1516,14 +1242,13 @@ with tab_depenses:
                             height=300,
                         )
 
-                        # Panneau pour gérer une ligne existante
+                        # Actions
                         st.markdown("#### Gérer une ligne existante")
                         selected_rownum = st.text_input(
                             "Numéro de ligne à modifier / supprimer",
                             key=f"dep_manage_row_{y}_{m_key}",
                             placeholder="ex: 1",
                         )
-
                         c1, c2 = st.columns(2)
 
                         with c1:
@@ -1543,19 +1268,14 @@ with tab_depenses:
                                         delete_depense(
                                             real_id, st.session_state.current_user_id
                                         )
-
-                                        # Invalider les caches
                                         cached_revenus_df.clear()
                                         cached_depenses_df.clear()
                                         load_user_df.clear()
-
                                         st.session_state.df = load_user_df(
                                             st.session_state.current_user_id
                                         )
-
                                         st.success(f"Ligne {rownum_int} supprimée.")
                                         st.rerun()
-
                                 except Exception as e:
                                     st.error(f"Erreur suppression : {e}")
 
@@ -1572,7 +1292,6 @@ with tab_depenses:
                                         st.warning("Numéro de ligne invalide.")
                                     else:
                                         r = row_match.iloc[0]
-                                        # Pousser la ligne dans le formulaire dynamique
                                         st.session_state.depenses_forms.append(
                                             {
                                                 "id": int(r["id"]),
@@ -1586,17 +1305,14 @@ with tab_depenses:
                                             f"Ligne {rownum_int} chargée en bas pour édition."
                                         )
                                         st.rerun()
-
                                 except Exception as e:
                                     st.error(f"Erreur chargement : {e}")
 
                         st.caption(
-                            "Vous pouvez modifier ou supprimer une ligne en indiquant son numéro de ligne ci-dessus."
+                            "Vous pouvez modifier ou supprimer une ligne en indiquant son numéro."
                         )
 
-    # =================================================
-    # Saisie dynamique (formulaires)
-    # =================================================
+    # --- Formulaires dynamiques (édition / nouvelles lignes) ---
     edited_rows_dep = []
     for i, form in enumerate(st.session_state.depenses_forms):
         key_date = f"dep_date_{i}"
@@ -1605,31 +1321,27 @@ with tab_depenses:
         key_lib_value = f"dep_lib_value_{i}"
         key_amt = f"dep_montant_{i}"
 
-        # Valeurs initiales propres
+        # Valeurs initiales + index
         initial_date = form.get("date", date.today())
         initial_cat = form.get("categorie", EXPENSE_CATEGORIES[0])
         initial_amt = form.get("montant", 0.0)
+        initial_cat_index = (
+            EXPENSE_CATEGORIES.index(initial_cat)
+            if initial_cat in EXPENSE_CATEGORIES
+            else 0
+        )
 
-        # Index initial pour la catégorie
-        if initial_cat in EXPENSE_CATEGORIES:
-            initial_cat_index = EXPENSE_CATEGORIES.index(initial_cat)
-        else:
-            initial_cat_index = 0
-
-        # Options de libellé
         init_opts = expense_suggestions_for_category(initial_cat, initial_date)
         initial_lib = form.get("libelle", init_opts[0] if init_opts else "Dépense")
         if initial_lib not in init_opts and init_opts:
             initial_lib = init_opts[0]
-        try:
-            initial_lib_index = init_opts.index(initial_lib)
-        except ValueError:
-            initial_lib_index = 0
+        initial_lib_index = (
+            init_opts.index(initial_lib) if initial_lib in init_opts else 0
+        )
 
-        # Colonnes de saisie
+        # Saisie
         cols = st.columns([1, 2, 2.6, 1.2, 1.2, 0.6])
 
-        # DATE
         with cols[0]:
             st.date_input(
                 "Date",
@@ -1638,8 +1350,6 @@ with tab_depenses:
                 on_change=dep_update_form,
                 args=(i, key_date, key_cat, key_lib_choice, key_lib_value, key_amt),
             )
-
-        # CATEGORIE
         with cols[1]:
             st.selectbox(
                 "Catégorie",
@@ -1649,8 +1359,6 @@ with tab_depenses:
                 on_change=dep_update_form,
                 args=(i, key_date, key_cat, key_lib_choice, key_lib_value, key_amt),
             )
-
-        # LIBELLE
         with cols[2]:
             st.selectbox(
                 "Libellé",
@@ -1660,12 +1368,9 @@ with tab_depenses:
                 on_change=dep_update_form,
                 args=(i, key_date, key_cat, key_lib_choice, key_lib_value, key_amt),
             )
-            # Synchroniser la valeur réelle libellé dans key_lib_value
             st.session_state[key_lib_value] = st.session_state.get(
                 key_lib_choice, initial_lib
             )
-
-        # MONTANT
         with cols[3]:
             st.number_input(
                 "Montant (€)",
@@ -1676,8 +1381,6 @@ with tab_depenses:
                 on_change=dep_update_form,
                 args=(i, key_date, key_cat, key_lib_choice, key_lib_value, key_amt),
             )
-
-        # RATIO LIVE
         with cols[4]:
             cur_date = st.session_state.get(key_date, initial_date)
             cur_cat = st.session_state.get(key_cat, initial_cat)
@@ -1685,19 +1388,16 @@ with tab_depenses:
             render_ratio_box(
                 cur_date, cur_cat, cur_amt, revenus_df_all, df_depenses_all
             )
-
-        # SUPPRIMER LA LIGNE DU FORMULAIRE
         with cols[5]:
             st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
             if st.button(
                 "❌",
                 key=f"del_dep_form_{i}",
                 type="secondary",
-                help="Supprimer cette ligne du formulaire",
+                help="Supprimer cette ligne",
                 use_container_width=True,
             ):
                 st.session_state.depenses_forms.pop(i)
-                # Nettoyer les clés des lignes suivantes
                 for j in range(i + 1, len(st.session_state.depenses_forms) + 1):
                     for k in [
                         f"dep_date_{j}",
@@ -1709,7 +1409,6 @@ with tab_depenses:
                         st.session_state.pop(k, None)
                 st.rerun()
 
-        # Construire la ligne à sauvegarder
         edited_rows_dep.append(
             {
                 "id": form.get("id"),
@@ -1722,19 +1421,14 @@ with tab_depenses:
 
     st.session_state.depenses_forms = edited_rows_dep
 
-    # ---------- Boutons bas ----------
-    #  DÉPENSES – ACTIONS (bas de section)
+    # --- Actions bas de section (ajout / sauvegarde) ---
     btn_left, btn_right = st.columns([3, 1])
 
     with btn_left:
         st.button("➕ Nouvelle dépense", key="add_depense", type="primary")
         if st.session_state.get("add_depense"):
             today = date.today()
-            # Base par défaut via depenses.py (catégorie + libellé cohérents)
-            base = default_depense_row(
-                EXPENSE_CATEGORIES, today
-            )  # dict: date, categorie, libelle, montant
-            # Suffixe le mois sur le libellé proposé (par cohérence d'affichage)
+            base = default_depense_row(EXPENSE_CATEGORIES, today)
             mois = _month_human(today)
             base["libelle"] = (
                 f"{base['libelle']}_{mois}"
@@ -1749,23 +1443,14 @@ with tab_depenses:
             "💾 Enregistrer dépenses", type="primary", use_container_width=True
         ):
             try:
-                # Écrit en base (INSERT ou UPDATE)
                 save_depenses_edits(edited_rows_dep, st.session_state.current_user_id)
-
-                # Vider le formulaire temporaire
                 st.session_state.depenses_forms = []
-
-                # Invalider les caches
                 cached_revenus_df.clear()
                 cached_depenses_df.clear()
                 load_user_df.clear()
-
-                # Recharger les données fraîches pour le dashboard global
                 st.session_state.df = load_user_df(st.session_state.current_user_id)
-
                 st.success("Dépenses enregistrées !")
                 st.rerun()
-
             except Exception as e:
                 st.error(f"Erreur : {e}")
 
@@ -1775,7 +1460,7 @@ with tab_depenses:
 # ================================================
 with tab_budget:
 
-    # --- compute_month_basics local ---
+    # --- Mini-agrégateur local (mois courant) ---
     def compute_month_basics(df: pd.DataFrame) -> dict:
         if df.empty:
             return {"revenus": 0.0, "depenses": 0.0, "solde": 0.0}
@@ -1783,7 +1468,7 @@ with tab_budget:
         depenses = float(-df.loc[df["type"] == "OUT", "montant"].sum())
         return {"revenus": revenus, "depenses": depenses, "solde": revenus - depenses}
 
-    # --- Styles ---
+    # --- Styles (cartes, alertes, entête) ---
     st.markdown(
         """
         <style>
@@ -1791,29 +1476,22 @@ with tab_budget:
         .budget-card.ok { background: #ecfdf5; border-color: #34d399; color: #065f46; }
         .budget-card.warn { background: #fff7ed; border-color: #fb923c; color: #7c2d12; }
         .budget-card.bad { background: #fef2f2; border-color: #f87171; color: #7f1d1d; }
-        .budget-card .label { font-size: 0.9rem; font-weight: 600; line-height: 1.2; margin-bottom: 4px; }
-        .budget-card .mainline { font-size: 1.1rem; font-weight: 700; line-height: 1.3; }
-        .budget-card .subline { font-size: 0.8rem; font-weight: 500; opacity: 0.8; line-height: 1.2; margin-top: 4px; }
-        .alert-row { border-radius:8px; border:1.5px solid #d1d5db; padding:8px 12px; box-shadow:0 1px 2px rgba(0,0,0,0.03); font-size:0.9rem; line-height:1.4; font-weight:500; margin-bottom:8px; background:#fff; color:#374151; }
+        .budget-card .subline { font-size: 0.8rem; font-weight: 500; opacity: 0.8; margin-top: 4px; }
+        .alert-row { border-radius:8px; border:1.5px solid #d1d5db; padding:8px 12px; box-shadow:0 1px 2px rgba(0,0,0,0.03); font-size:0.9rem; margin-bottom:8px; background:#fff; color:#374151; }
         .alert-row.spend { border-color:#fb923c; background:#fff7ed; color:#7c2d12; }
         .header-stat-card { border: 1.5px solid #d1d5db; background: #fff; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); padding: 8px 12px; min-width: 120px; text-align: center; font-family: system-ui; }
-        .header-stat-label { font-size: 0.7rem; font-weight: 600; color: #6b7280; line-height: 1.2; margin-bottom: 4px; }
-        .header-stat-value { font-size: 1rem; font-weight: 700; line-height: 1.3; }
-        .header-stat-value.normal { color: #111827; }
-        .header-solde-note-inline { font-size: 0.65rem; font-weight: 500; color: #9ca3af; line-height: 1.2; margin-left: 4px; white-space: nowrap; }
+        .header-stat-label { font-size: 0.7rem; font-weight: 600; color: #6b7280; margin-bottom: 4px; }
+        .header-stat-value { font-size: 1rem; font-weight: 700; }
+        .header-solde-note-inline { font-size: 0.65rem; font-weight: 500; color: #9ca3af; margin-left: 4px; white-space: nowrap; }
         .header-wrapper { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; row-gap:12px; column-gap:16px; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #e5e7eb; }
         .title-nav-container { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 8px; }
-        .solde-green { color: #065f46; }
-        .solde-blue { color: #111827; }
-        .solde-orange { color: #9a3412; }
-        .solde-red { color: #7f1d1d; }
+        .solde-green { color: #065f46; } .solde-blue { color: #111827; } .solde-orange { color: #9a3412; } .solde-red { color: #7f1d1d; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # --- State ---
-    #  BUDGET – INITIALISATION DU STATE
+    # --- State (vue + période sélectionnée) ---
     if "budget_view_mode" not in st.session_state:
         st.session_state.budget_view_mode = "mois"
     if "budget_selected_month_key" not in st.session_state:
@@ -1821,7 +1499,7 @@ with tab_budget:
     if "budget_selected_year" not in st.session_state:
         st.session_state.budget_selected_year = None
 
-    # --- Calculs : préparation des mois disponibles ---
+    # --- Prépare les périodes disponibles ---
     df_all_dates = st.session_state.df.copy()
     df_all_dates["date"] = pd.to_datetime(df_all_dates["date"], errors="coerce")
     df_all_dates = df_all_dates.dropna(subset=["date"])
@@ -1853,120 +1531,95 @@ with tab_budget:
         .to_dict("records")
     )
 
-    month_options = []
-    for item in mois_uniques:
-        y = int(item["year"])
-        m = int(item["month"])
-        label = f"{MOIS_FR_LONG[m]} {y}"
-        month_options.append(
-            {
-                "key": f"{y}-{m:02d}",
-                "label": label,
-                "year": y,
-                "month": m,
-            }
-        )
+    month_options = [
+        {
+            "key": f"{int(x['year'])}-{int(x['month']):02d}",
+            "label": f"{MOIS_FR_LONG[int(x['month'])]} {int(x['year'])}",
+            "year": int(x["year"]),
+            "month": int(x["month"]),
+        }
+        for x in mois_uniques
+    ]
 
-    # Default month
-    today_y = date.today().year
-    today_m = date.today().month
+    today_y, today_m = date.today().year, date.today().month
     today_key = f"{today_y}-{today_m:02d}"
-
-    if any(opt["key"] == today_key for opt in month_options):
-        default_month_key = today_key
-    else:
-        default_month_key = month_options[0]["key"] if month_options else today_key
-
+    default_month_key = (
+        today_key
+        if any(o["key"] == today_key for o in month_options)
+        else (month_options[0]["key"] if month_options else today_key)
+    )
     if st.session_state.budget_selected_month_key is None:
         st.session_state.budget_selected_month_key = default_month_key
 
-    # --- Header avec sélecteurs ---
+    # --- Header : sélecteurs + titre ---
     with st.container():
         st.markdown('<div class="title-nav-container">', unsafe_allow_html=True)
         title_left, title_center, title_right = st.columns([0.33, 0.34, 0.33])
 
-        # --- Colonne gauche : sélecteur de période ---
+        # Sélecteur période
         with title_left:
             if st.session_state.budget_view_mode == "mois":
-                labels_mois = [opt["label"] for opt in month_options]
-                keys_mois = [opt["key"] for opt in month_options]
-
-                if len(keys_mois) == 0:
-                    # Aucun mois disponible : probablement aucun revenu/dépense daté
+                labels = [o["label"] for o in month_options]
+                keys = [o["key"] for o in month_options]
+                if not keys:
                     st.warning(
-                        "⚠️ Ajoute au moins une ligne de revenu ou de dépense avec une date pour activer le suivi mensuel."
+                        "⚠️ Ajoute au moins une opération datée pour activer la vue mensuelle."
                     )
                     chosen_key = None
                 else:
-                    # Déterminer l’index courant si possible
-                    current_key = st.session_state.budget_selected_month_key
-                    if current_key not in keys_mois:
-                        current_idx = 0
-                    else:
-                        current_idx = keys_mois.index(current_key)
-
+                    cur_key = st.session_state.budget_selected_month_key
+                    cur_idx = keys.index(cur_key) if cur_key in keys else 0
                     chosen_idx = st.selectbox(
                         "Période",
-                        range(len(keys_mois)),
-                        index=current_idx,
-                        format_func=lambda i: labels_mois[i],
+                        range(len(keys)),
+                        index=cur_idx,
+                        format_func=lambda i: labels[i],
                         key="budget_month_selector_ui",
                     )
-
-                    # chosen_idx doit être un entier valide ici
-                    chosen_key = keys_mois[chosen_idx]
-
-                # Mise à jour de la clé sélectionnée seulement si elle est valide
+                    chosen_key = keys[chosen_idx]
                 if chosen_key is not None:
                     st.session_state.budget_selected_month_key = chosen_key
-
             else:
-                # --- Mode "année" ---
                 years = sorted(
                     st.session_state.df["date"].dt.year.unique(), reverse=True
                 )
-
                 if years:
                     if (
                         st.session_state.budget_selected_year is None
                         or st.session_state.budget_selected_year not in years
                     ):
                         st.session_state.budget_selected_year = years[0]
-
-                    selected_year = st.selectbox(
+                    sel_year = st.selectbox(
                         "Année",
                         years,
                         index=years.index(st.session_state.budget_selected_year),
                         key="budget_year_selector",
                     )
-                    st.session_state.budget_selected_year = selected_year
+                    st.session_state.budget_selected_year = sel_year
                 else:
-                    st.warning(
-                        "⚠️ Aucune donnée datée trouvée. Ajoute des opérations pour activer la vue annuelle."
-                    )
+                    st.warning("⚠️ Aucune donnée datée pour activer la vue annuelle.")
 
-        # --- Colonne centre : titre + switch vue ---
+        # Titre + switch vue
         with title_center:
             if st.session_state.budget_view_mode == "mois":
-                chosen_key = st.session_state.budget_selected_month_key
-                chosen_label = next(
-                    (opt["label"] for opt in month_options if opt["key"] == chosen_key),
+                ck = st.session_state.budget_selected_month_key
+                cl = next(
+                    (o["label"] for o in month_options if o["key"] == ck),
                     "Mois sélectionné",
                 )
-                titre_dashboard = f"Situation {chosen_label}"
+                titre_dashboard = f"Situation {cl}"
             else:
                 titre_dashboard = (
                     f"Situation année {st.session_state.budget_selected_year}"
                 )
 
             st.markdown(
-                f'<div style="text-align:center; font-weight:600; font-size:1rem; color:#111827; line-height:1.3;">{titre_dashboard}</div>',
+                f'<div style="text-align:center; font-weight:600; font-size:1rem; color:#111827;">{titre_dashboard}</div>',
                 unsafe_allow_html=True,
             )
-
             view_choice = st.selectbox(
                 "Vue",
-                options=["mois", "annee"],
+                ["mois", "annee"],
                 index=0 if st.session_state.budget_view_mode == "mois" else 1,
                 format_func=lambda x: "Mensuelle" if x == "mois" else "Annuelle",
                 key="budget_view_mode_selector",
@@ -1980,32 +1633,27 @@ with tab_budget:
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # --- Récupération finale de la période ---
+    # --- Période courante (df mois / df année) ---
     if st.session_state.budget_view_mode == "mois":
         y_str, m_str = st.session_state.budget_selected_month_key.split("-")
-        target_year = int(y_str)
-        target_month = int(m_str)
+        target_year, target_month = int(y_str), int(m_str)
         df_month = slice_df_for_month(st.session_state.df, target_year, target_month)
         df_year = slice_df_for_year(st.session_state.df, target_year)
     else:
         target_year = int(st.session_state.budget_selected_year)
         df_year = slice_df_for_year(st.session_state.df, target_year)
-        df_month = pd.DataFrame(
-            columns=st.session_state.df.columns
-        )  # vide pour cohérence
+        df_month = pd.DataFrame(columns=st.session_state.df.columns)
 
-    # --- Calculs finaux ---
+    # --- Calculs (mois / année) ---
     s = compute_summary(df_month)
     s_year = compute_summary(df_year)
-
     month_basics = compute_month_basics(df_month)
     year_totals = compute_totals(df_year)
     year_timeseries = build_year_timeseries(df_year)
-
     month_forecast = predict_end_of_month(df_month)
     year_forecast = predict_end_of_year(df_year)
 
-    # --- Alertes ---
+    # --- Alertes (top 3 catégories du mois) ---
     alerts = []
     if not df_month.empty:
         dep = df_month[df_month["type"] == "OUT"].copy()
@@ -2023,7 +1671,7 @@ with tab_budget:
                 }
             )
 
-    # --- Couleur solde ---
+    # --- Couleur solde (mois) ---
     solde_val = float(month_basics["solde"])
     solde_class = (
         "solde-green"
@@ -2031,11 +1679,13 @@ with tab_budget:
         else (
             "solde-blue"
             if solde_val >= 0
-            else "solde-orange" if solde_val >= -1000 else "solde-red"
+            else ("solde-orange" if solde_val >= -1000 else "solde-red")
         )
     )
 
-    # --- VUE MENSUELLE ---
+    # ======================
+    # VUE MENSUELLE
+    # ======================
     if st.session_state.budget_view_mode == "mois":
         header_html = f"""
         <div class="header-wrapper" style="margin-top:8px;">
@@ -2061,84 +1711,56 @@ with tab_budget:
         st.markdown(header_html, unsafe_allow_html=True)
 
         left_col, right_col = st.columns([1, 1])
+
+        # Alertes
         with left_col:
             st.markdown("#### À surveiller ce mois-ci")
             if not alerts:
                 st.success("Aucune alerte prioritaire ce mois-ci. Continue comme ça")
             else:
-                for alert in alerts:
+                for a in alerts:
                     st.markdown(
-                        f'<div class="alert-row spend">{alert["text"]}</div>',
+                        f'<div class="alert-row spend">{a["text"]}</div>',
                         unsafe_allow_html=True,
                     )
                 if len(alerts) > 1:
                     st.caption("Les montants les plus lourds apparaissent en premier.")
 
+        # 50/30/20
         with right_col:
             st.markdown("#### Où part ton argent ? (règle 50 / 30 / 20)")
             revenu_mois = float(month_basics.get("revenus", 0.0))
-            part_besoins_pct = float(s["split"].get("50", 0.0))
-            part_envies_pct = float(s["split"].get("30", 0.0))
-            part_epargne_pct = float(s["split"].get("20", 0.0))
-            besoins_eur = revenu_mois * (part_besoins_pct / 100.0)
-            envies_eur = revenu_mois * (part_envies_pct / 100.0)
-            epargne_eur = revenu_mois * (part_epargne_pct / 100.0)
+            p50, p30, p20 = (
+                float(s["split"].get("50", 0.0)),
+                float(s["split"].get("30", 0.0)),
+                float(s["split"].get("20", 0.0)),
+            )
+            e50, e30, e20 = (
+                revenu_mois * (p50 / 100),
+                revenu_mois * (p30 / 100),
+                revenu_mois * (p20 / 100),
+            )
 
-            def status_class_for_spend(pct, target, soft_cap):
-                if pct <= target:
-                    return "ok"
-                if pct <= soft_cap:
-                    return "warn"
-                return "bad"
+            def cls_spend(p, target, soft):
+                return "ok" if p <= target else ("warn" if p <= soft else "bad")
 
-            def status_class_for_saving(pct, target_min, warn_min):
-                if pct >= target_min:
-                    return "ok"
-                if pct >= warn_min:
-                    return "warn"
-                return "bad"
-
-            status_besoins = status_class_for_spend(part_besoins_pct, 50, 55)
-            status_envies = status_class_for_spend(part_envies_pct, 30, 35)
-            status_epargne = status_class_for_saving(part_epargne_pct, 20, 10)
+            def cls_save(p, target, warn):
+                return "ok" if p >= target else ("warn" if p >= warn else "bad")
 
             st.markdown(
-                f"""
-                <div class="budget-card {status_besoins}" style="margin-bottom:8px;">
-                    <div style="font-size:0.9rem; line-height:1.3;">
-                        <span style="font-weight:600;">Besoins</span> • <span style="font-weight:700;">{part_besoins_pct:.1f}% • {besoins_eur:,.0f} €</span>
-                    </div>
-                    <div class="subline" style="margin-top:4px;">Objectif 50% max</div>
-                </div>
-            """.replace(
+                f'<div class="budget-card {cls_spend(p50,50,55)}" style="margin-bottom:8px;"><b>Besoins</b> • <b>{p50:.1f}% • {e50:,.0f} €</b><div class="subline">Objectif 50% max</div></div>'.replace(
                     ",", " "
                 ),
                 unsafe_allow_html=True,
             )
-
             st.markdown(
-                f"""
-                <div class="budget-card {status_envies}" style="margin-bottom:8px;">
-                    <div style="font-size:0.9rem; line-height:1.3;">
-                        <span style="font-weight:600;">Envies</span> • <span style="font-weight:700;">{part_envies_pct:.1f}% • {envies_eur:,.0f} €</span>
-                    </div>
-                    <div class="subline" style="margin-top:4px;">Objectif 30% max</div>
-                </div>
-            """.replace(
+                f'<div class="budget-card {cls_spend(p30,30,35)}" style="margin-bottom:8px;"><b>Envies</b> • <b>{p30:.1f}% • {e30:,.0f} €</b><div class="subline">Objectif 30% max</div></div>'.replace(
                     ",", " "
                 ),
                 unsafe_allow_html=True,
             )
-
             st.markdown(
-                f"""
-                <div class="budget-card {status_epargne}">
-                    <div style="font-size:0.9rem; line-height:1.3;">
-                        <span style="font-weight:600;">Épargne</span> • <span style="font-weight:700;">{part_epargne_pct:.1f}% • {epargne_eur:,.0f} €</span>
-                    </div>
-                    <div class="subline" style="margin-top:4px;">Objectif 20% ou plus</div>
-                </div>
-            """.replace(
+                f'<div class="budget-card {cls_save(p20,20,10)}"><b>Épargne</b> • <b>{p20:.1f}% • {e20:,.0f} €</b><div class="subline">Objectif 20% ou plus</div></div>'.replace(
                     ",", " "
                 ),
                 unsafe_allow_html=True,
@@ -2146,10 +1768,12 @@ with tab_budget:
 
         st.divider()
 
+        # Graphiques mois
         st.markdown(
             f"### Dépenses {month_options[0]['label'] if month_options else 'Mois'} (vue graphique)"
         )
         c1, c2 = st.columns(2)
+
         with c1:
             st.markdown("**Top postes de dépenses**")
             if not s["by_cat"].empty:
@@ -2168,10 +1792,8 @@ with tab_budget:
         with c2:
             st.markdown("**Répartition des dépenses**")
             if not df_month.empty:
-                depenses_mois = df_month[df_month["type"] == "OUT"].copy()
-                donut_df = (
-                    depenses_mois.groupby("categorie")["montant"].sum().reset_index()
-                )
+                dep_mois = df_month[df_month["type"] == "OUT"].copy()
+                donut_df = dep_mois.groupby("categorie")["montant"].sum().reset_index()
                 donut_df["montant_abs"] = donut_df["montant"].abs()
                 total_mois = donut_df["montant_abs"].sum()
                 fig_donut = px.pie(
@@ -2197,6 +1819,7 @@ with tab_budget:
 
         st.divider()
 
+        # Projection fin de mois (si on est sur le mois courant)
         if st.session_state.budget_selected_month_key == today_key:
             st.markdown("### Si tu continues comme ça…")
             p1, p2, p3 = st.columns(3)
@@ -2206,6 +1829,7 @@ with tab_budget:
             st.caption("Projection basée sur ton rythme actuel.")
             st.divider()
 
+        # Coach (mensuel)
         st.markdown("#### Ton coach")
         coach_md = build_coach_text(
             month_summary=month_basics,
@@ -2217,23 +1841,17 @@ with tab_budget:
         st.markdown(coach_md, unsafe_allow_html=True)
         st.divider()
 
-    # --- VUE ANNUELLE ---
+    # ======================
+    # VUE ANNUELLE
+    # ======================
     else:
         header_year_html = f"""
         <div class="header-wrapper" style="margin-top:8px;">
-            <div class="header-stat-card">
-                <div class="header-stat-label">Revenus cumulés {target_year}</div>
-                <div class="header-stat-value normal">{year_totals['revenus']:.0f} €</div>
-            </div>
-            <div class="header-stat-card">
-                <div class="header-stat-label">Dépenses cumulées {target_year}</div>
-                <div class="header-stat-value normal">{year_totals['depenses']:.0f} €</div>
-            </div>
+            <div class="header-stat-card"><div class="header-stat-label">Revenus cumulés {target_year}</div><div class="header-stat-value">{year_totals['revenus']:.0f} €</div></div>
+            <div class="header-stat-card"><div class="header-stat-label">Dépenses cumulées {target_year}</div><div class="header-stat-value">{year_totals['depenses']:.0f} €</div></div>
             <div class="header-stat-card">
                 <div class="header-stat-label">Solde {target_year}</div>
-                <div class="header-stat-value {'solde-green' if year_totals['solde'] >= 0 else 'solde-red'}">
-                    {year_totals['solde']:,.0f} €
-                </div>
+                <div class="header-stat-value {'solde-green' if year_totals['solde'] >= 0 else 'solde-red'}">{year_totals['solde']:,.0f} €</div>
             </div>
         </div>
         """.replace(
@@ -2277,7 +1895,7 @@ with tab_budget:
         st.markdown(coach_year_md, unsafe_allow_html=True)
         st.divider()
 
-    # === Simulateur d'épargne ===
+    # --- Simulateur d'épargne (simple, visible partout) ---
     with st.expander("Simulation rapide d’épargne", expanded=False):
         c = st.columns(4)
         with c[0]:

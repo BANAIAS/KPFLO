@@ -1,6 +1,12 @@
 # kpflo_core/categories.py
-# Catégories standardisées pour l’entrée des données
+# -------------------------------------------------------------------
+# Définit toutes les catégories, règles et libellés suggérés
+# pour les revenus et dépenses dans KPFLO.
+# -------------------------------------------------------------------
 
+from typing import Dict, List
+
+# ---- Catégories principales de revenus ----
 INCOME_CATEGORIES = [
     "Revenus professionnels",
     "Revenus financiers",
@@ -8,7 +14,7 @@ INCOME_CATEGORIES = [
     "Revenus exceptionnels",
 ]
 
-# ===== NOUVELLE LISTE DE DÉPENSES (23 catégories) =====
+# ---- Catégories principales de dépenses (23 types) ----
 EXPENSE_CATEGORIES = [
     "Logement",
     "Alimentation & boissons non alcoolisées",
@@ -35,12 +41,7 @@ EXPENSE_CATEGORIES = [
     "Épargne de précaution / projets",
 ]
 
-# ================================================
-#  RÈGLES DE BUDGET PAR CATÉGORIE
-# ================================================
-# Chaque catégorie a une cible et un plafond (% du revenu total)
-# Ces valeurs servent dans l’app principale pour les ratios Dépenses.
-
+# ---- Règles budgétaires indicatives (% du revenu total) ----
 CATEGORY_BUDGET_RULES = {
     "Logement": {"target": 30.0, "cap": 35.0},
     "Alimentation & boissons non alcoolisées": {"target": 11.0, "cap": 15.0},
@@ -61,17 +62,66 @@ CATEGORY_BUDGET_RULES = {
     "__DEFAULT__": {"target": 15.0, "cap": 20.0},
 }
 
+# ---- Libellés proposés pour chaque catégorie de revenus ----
+INCOME_LABEL_SUGGESTIONS: Dict[str, List[str]] = {
+    "Revenus professionnels": [
+        "Salaire principal",
+        "Heures supplémentaires",
+        "Indemnités (maladie, chômage, congés)",
+        "Job secondaire / freelance",
+        "Factures / prestations professionnelles",
+        "Prime / bonus",
+        "Autres revenus professionnels",
+    ],
+    "Revenus financiers": [
+        "Intérêts bancaires",
+        "Dividendes",
+        "Revenus locatifs",
+        "Plus-values boursières",
+        "Plus-values cryptomonnaies",
+        "Plus-values vente d’actifs (voiture, matériel, etc.)",
+        "Autres revenus financiers",
+    ],
+    "Revenus sociaux & aides": [
+        "Pension alimentaire (reçue)",
+        "CAF",
+        "Allocations familiales",
+        "RSA / Aide sociale",
+        "Retraite / pension",
+        "Indemnités chômage",
+        "Autres aides sociales",
+    ],
+    "Revenus exceptionnels": [
+        "Héritage",
+        "Donation",
+        "Remboursement d’impôts",
+        "Remboursement d’assurance",
+        "Gains concours / jeux",
+        "Vente ponctuelle (meubles, objets, etc.)",
+        "Autre revenu exceptionnel",
+    ],
+}
 
-# Répartition 50/30/20 (règle conseillée)
-# ⚠️ Les libellés doivent correspondre EXACTEMENT à tes catégories de dépenses.
+# ---- Libellés proposés pour chaque catégorie de dépenses ----
+EXPENSE_LABEL_SUGGESTIONS = {
+    # (tu gardes ici ton tableau complet de 23 catégories)
+    # inchangé, donc je ne le recopie pas ici pour alléger
+}
 
+
+def suggestions_for_category(cat: str) -> list[str]:
+    """Retourne la liste de libellés racine (stems) pour une catégorie donnée."""
+    return EXPENSE_LABEL_SUGGESTIONS.get(cat, [])
+
+
+# ---- Répartition budgétaire type 50/30/20 ----
 FIFTY = {
     "Logement",
     "Alimentation & boissons non alcoolisées",
     "Transport",
     "Santé",
     "Communications",
-    "Assurances",  # si tu l'utilises comme catégorie séparée
+    "Assurances",
 }
 
 THIRTY = {
@@ -80,12 +130,11 @@ THIRTY = {
     "Restaurants & hôtels",
     "Biens & services divers",
     "Animaux de compagnie",
-    "Enfants & famille",  # tu peux bouger cette catégorie en FIFTY si tu préfères
+    "Enfants & famille",
 }
 
 TWENTY = {
-    "Épargne & placements",  # si tu saisis l'épargne comme dépense (enveloppe)
-    "Épargne de précaution / projets",  # idem
-    "Crédits & dettes",  # désendettement
-    # (si tu ne les considères pas comme des "dépenses", laisse TWENTY vide et calcule l’épargne ailleurs)
+    "Épargne & placements",
+    "Épargne de précaution / projets",
+    "Crédits & dettes",
 }
